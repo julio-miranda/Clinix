@@ -1,17 +1,29 @@
-.env
-.env.*
-!.env.example
+# =========================================================================
+# ARCHIVOS LOCALES Y DE ENTORNO DE DESARROLLO (Editores y SO)
+# =========================================================================
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
 
-node_modules/
-dist/
-build/
+# Respaldo de Base de Datos Local de CLINIX (Evita subir datos sensibles)
+backup_clinix.sql
 
+# Archivos temporales, respaldos generales y logs
 *.log
 *.tmp
 *.bak
 
-.DS_Store
-Thumbs.db
+# =========================================================================
+# VARIABLES DE ENTORNO (Contienen credenciales secretas)
+# =========================================================================
+.env
+.env.*
+!.env.example
 
-.vscode/
-.idea/
+# =========================================================================
+# DEPENDENCIAS Y RECOPILACIONES (Node.js / Producción)
+# =========================================================================
+node_modules/
+dist/
+build/
