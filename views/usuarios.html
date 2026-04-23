@@ -1,0 +1,115 @@
+<section class="page">
+    <div class="detail-header">
+        <h1>Gestión de Usuarios</h1>
+        <a href="#/dashboard" class="btn-back">← Regresar al dashboard</a>
+    </div>
+
+    <div class="catalog-layout">
+        <aside class="card">
+            <h2>Filtros</h2>
+
+            <div class="catalog-menu-list">
+                <label for="usuarioSearch">Buscar usuario</label>
+                <input type="text" id="usuarioSearch" placeholder="Buscar por nombre o correo..." />
+
+                <button type="button" id="btnBuscarUsuario" class="btn-primary catalog-menu-btn">
+                    Buscar
+                </button>
+
+                <button type="button" id="btnLimpiarUsuario" class="btn-secondary catalog-menu-btn">
+                    Limpiar
+                </button>
+
+                <button type="button" id="btnNuevoUsuario" class="btn-primary catalog-menu-btn">
+                    Nuevo usuario
+                </button>
+            </div>
+
+            <div id="usuariosAlert" style="margin-top: 16px;"></div>
+        </aside>
+
+        <main class="card">
+            <div id="catalogHeader">
+                <p>Lista de usuarios registrados.</p>
+            </div>
+
+            <div id="catalogBody">
+                <div class="table-container">
+                    <table class="table-scroll">
+                        <thead>
+                            <tr>
+                                <th>Nombre completo</th>
+                                <th>Correo</th>
+                                <th>Roles</th>
+                                <th>Estado</th>
+                                <th>Creado</th>
+                                <th>Actualizado</th>
+                                <th>Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody id="usuariosTableBody">
+                            <tr>
+                                <td colspan="7" style="text-align: center; padding: 20px;">
+                                    Cargando usuarios...
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <div id="usuarioModal" class="card catalog-form" style="display: none; margin-top: 18px;">
+        <h2>Formulario de Usuario</h2>
+
+        <form id="usuarioForm">
+            <input type="hidden" id="usuarioId" />
+
+            <div class="form-grid">
+                <div>
+                    <label for="usuarioNombreCompleto">Nombre completo</label>
+                    <input type="text" id="usuarioNombreCompleto" placeholder="Ingrese el nombre completo" required />
+                </div>
+
+                <div>
+                    <label for="usuarioEmail">Correo electrónico</label>
+                    <input type="email" id="usuarioEmail" placeholder="Ingrese el correo" required />
+                </div>
+            </div>
+
+            <div class="form-grid">
+                <div>
+                    <label for="usuarioPassword">Contraseña</label>
+                    <input type="password" id="usuarioPassword" placeholder="Ingrese la contraseña" />
+                </div>
+
+                <div>
+                    <label for="usuarioConfirmPassword">Confirmar contraseña</label>
+                    <input type="password" id="usuarioConfirmPassword" placeholder="Repita la contraseña" />
+                </div>
+            </div>
+
+            <div class="form-section">
+                <h2>Roles</h2>
+                <label for="usuarioRoles">Asignar roles</label>
+                <select id="usuarioRoles" multiple size="5"></select>
+                <small>Use Ctrl o Shift para seleccionar varios roles.</small>
+            </div>
+
+            <div class="checkbox-group">
+                <input type="checkbox" id="usuarioActivo" checked />
+                <label for="usuarioActivo" style="margin: 0;">Usuario activo</label>
+            </div>
+
+            <div class="form-actions">
+                <button type="button" id="btnCancelarUsuario">
+                    Cancelar
+                </button>
+                <button type="submit" class="btn-primary">
+                    Guardar
+                </button>
+            </div>
+        </form>
+    </div>
+</section>
