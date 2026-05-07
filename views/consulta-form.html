@@ -1,0 +1,213 @@
+<section class="page">
+
+  <div class="detail-header">
+
+    <div>
+      <h1>Consulta médica</h1>
+      <p>
+        Registro de antecedentes, signos vitales,
+        diagnóstico, plan y próxima cita.
+      </p>
+    </div>
+
+    <div class="toolbar">
+
+      <a href="#/dashboard" class="btn-secondary"
+        style="text-decoration:none; display:inline-flex; align-items:center; justify-content:center;">
+        ← Volver
+      </a>
+
+    </div>
+
+  </div>
+
+  <form id="encounterForm" class="card" enctype="multipart/form-data">
+
+    <!-- ===========================
+         DATOS GENERALES
+    ============================ -->
+
+    <div class="form-section">
+
+      <h2>Datos generales</h2>
+
+      <label>Paciente</label>
+
+      <select name="patient_id" id="patientSelect" required>
+
+        <option value="">
+          Seleccione un paciente
+        </option>
+
+      </select>
+
+      <label>Motivo de consulta</label>
+
+      <textarea name="chief_complaint" required>
+      </textarea>
+
+      <label>Enfermedad actual</label>
+
+      <textarea name="present_illness">
+      </textarea>
+
+      <label>Examen físico</label>
+
+      <textarea name="physical_exam">
+      </textarea>
+
+    </div>
+
+    <!-- ===========================
+         ANTECEDENTES
+    ============================ -->
+
+    <div class="form-section">
+
+      <h2>Antecedentes</h2>
+
+      <label>Antecedentes médicos</label>
+
+      <textarea name="medical_history" placeholder="Se llenará automáticamente al seleccionar el paciente.">
+      </textarea>
+
+      <label>Antecedentes quirúrgicos</label>
+
+      <textarea name="surgical_history" placeholder="Se llenará automáticamente al seleccionar el paciente.">
+      </textarea>
+
+      <label>Alergias</label>
+
+      <textarea name="allergies" placeholder="Se llenará automáticamente al seleccionar el paciente.">
+      </textarea>
+
+    </div>
+
+    <!-- ===========================
+         SIGNOS VITALES
+    ============================ -->
+
+    <div class="form-section">
+
+      <h2>Signos vitales</h2>
+
+      <div class="grid-3">
+
+        <div>
+          <label>Peso (kg)</label>
+          <input type="number" step="0.01" name="weight_kg" />
+        </div>
+
+        <div>
+          <label>Altura (cm)</label>
+          <input type="number" step="0.01" name="height_cm" />
+        </div>
+
+        <div>
+          <label>Temperatura (°C)</label>
+          <input type="number" step="0.1" name="temperature_c" />
+        </div>
+
+        <div>
+          <label>Presión sistólica</label>
+          <input type="number" name="systolic_bp" />
+        </div>
+
+        <div>
+          <label>Presión diastólica</label>
+          <input type="number" name="diastolic_bp" />
+        </div>
+
+        <div>
+          <label>Pulso</label>
+          <input type="number" name="pulse_rate" />
+        </div>
+
+        <div>
+          <label>Frecuencia respiratoria</label>
+          <input type="number" name="respiratory_rate" />
+        </div>
+
+      </div>
+
+    </div>
+
+    <!-- ===========================
+         DIAGNÓSTICO
+    ============================ -->
+
+    <div class="form-section">
+
+      <h2>Diagnóstico y plan</h2>
+
+      <label>Código diagnóstico</label>
+
+      <input type="text" name="diagnosis_code" placeholder="Ej: J00" />
+
+      <label>Diagnóstico principal</label>
+
+      <textarea name="primary_diagnosis">
+      </textarea>
+
+      <label>Plan terapéutico</label>
+
+      <textarea name="plan_items" placeholder="Una indicación por línea">
+      </textarea>
+
+    </div>
+
+    <!-- ===========================
+         CITA
+    ============================ -->
+
+    <div class="form-section">
+
+      <h2>Próxima cita</h2>
+
+      <label>Fecha y hora</label>
+
+      <input type="datetime-local" name="next_appointment" />
+
+      <label>Motivo</label>
+
+      <input type="text" name="appointment_reason" />
+
+    </div>
+
+    <div class="form-section">
+      <h2>Adjuntos / Documentos</h2>
+
+      <label>Título del documento</label>
+      <input type="text" name="attachment_title" placeholder="Ej: Laboratorio, Ultrasonido, Radiografía" />
+
+      <label>Descripción</label>
+      <textarea name="attachment_description" placeholder="Observaciones del documento"></textarea>
+
+      <label>Archivos</label>
+      <input type="file" name="file" accept=".pdf,image/jpeg,image/png,image/webp" required />
+
+      <small>
+        Puede subir uno o varios archivos PDF o imágenes.
+      </small>
+    </div>
+
+    <!-- ===========================
+         BOTONES
+    ============================ -->
+
+    <div class="form-actions">
+
+      <a href="#/dashboard" class="btn-secondary"
+        style="text-decoration:none; display:inline-flex; align-items:center; justify-content:center;">
+        Cancelar
+      </a>
+
+      <button type="submit">
+        Guardar consulta
+      </button>
+
+    </div>
+
+  </form>
+
+</section>

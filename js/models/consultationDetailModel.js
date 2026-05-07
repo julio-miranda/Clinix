@@ -1,0 +1,147 @@
+//js/models/consultationDetailModel.js
+import { supabase } from "../config/supabase.js";
+import { getSignedAttachmentUrl, listEncounterAttachments } from "./attachmentModel.js";
+
+export async function getConsultationAttachments(encounterId) {
+  const attachments = await listEncounterAttachments(encounterId);
+
+  const resolved = [];
+  for (const item of attachments) {
+    let signedUrl = null;
+    try {
+      signedUrl = await getSignedAttachmentUrl(item.file_url, 3600);
+    } catch (e) {
+      signedUrl = null;
+    }
+
+    resolved.push({
+      ...item,
+      signed_url: signedUrl
+    });
+  } encounterId
+
+  return resolved;
+}
+
+export async function getConsultationDetail(encounterId) {
+  const { data, error } = await supabase
+    .from("encounters")
+    .select(`
+      id,
+      patient_id,
+      created_by_user_id,
+      attended_by_user_id,
+      encounter_status_id,
+      encounter_statuses (
+      id,
+      code,
+      name),
+      encounter_at,
+      chief_complaint,
+      present_illness,
+      physical_exam,
+      notes,
+      closed_at,
+      created_at,
+      updated_at,
+      patients (
+        id,
+        medical_record_number,
+        first_name,
+        last_name,
+        birth_date,
+        occupation,
+        active
+      ),
+      vital_signs (
+        id,
+        weight_kg,
+        height_cm,
+        temperature_c,
+        systolic_bp,
+        diastolic_bp,
+        pulse_rate,
+        respiratory_rate,
+        recorded_at
+      ),
+      encounter_diagnoses (
+        id,
+        is_primary,
+        notes,
+        created_at,
+        diagnosis_catalog (
+          id,
+          code,
+          description
+        )
+      ),
+      encounter_plan_items (
+        id,
+        description,
+        sort_order,
+        created_at,
+        plan_item_types (
+          id,
+          code,
+          name
+        )
+      ),
+      appointments (
+        id,
+        scheduled_at,
+        reason,
+        created_at,
+        appointment_statuses (
+          id,
+          code,
+          name
+        )
+      )
+    `)
+    .eq("id", encounterId)
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
+export async function getPatientHistory(patientId) {
+  const { data, error } = await supabase
+    .from("patient_history_items")
+    .select(`
+      id,
+      description,
+      recorded_at,
+      patient_history_types (
+        id,
+        code,
+        name
+      )
+    `)
+    .eq("patient_id", patientId)
+    .order("recorded_at", { ascending: false });
+
+  if (error) throw error;
+  return data ?? [];
+}
+
+export async function getPatientAllergies(patientId) {
+  const { data, error } = await supabase
+    .from("patient_allergies")
+    .select(`
+      id,
+      allergen,
+      reaction,
+      noted_at,
+      allergy_severities (
+        id,
+        code,
+        name
+      )
+    `)
+    .eq("patient_id", patientId)
+    .order("noted_at", { ascending: false });
+
+  if (error) throw error;
+  return data ?? [];
+}
