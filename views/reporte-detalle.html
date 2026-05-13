@@ -1,0 +1,43 @@
+<section class="page">
+  <div class="detail-header">
+    <div>
+      <h1>Detalle de reporte</h1>
+      <p id="reportDetailSubtitle">Selecciona un módulo.</p>
+    </div>
+
+    <a href="#/reportes">← Volver a reportes</a>
+  </div>
+
+  <div class="card report-filters">
+    <div>
+      <label>Módulo</label>
+      <select id="reportModule">
+        <option value="consultas">Consultas</option>
+        <option value="pacientes">Pacientes</option>
+        <option value="citas">Citas</option>
+        <option value="diagnosticos">Diagnósticos</option>
+      </select>
+    </div>
+
+    <div>
+      <label>Desde</label>
+      <input type="date" id="reportFrom">
+    </div>
+
+    <div>
+      <label>Hasta</label>
+      <input type="date" id="reportTo">
+    </div>
+
+    <div class="report-actions">
+      <button id="btnLoadReportDetail">Cargar detalle</button>
+    </div>
+  </div>
+
+  <div id="reportDetailSummary" class="report-summary"></div>
+
+  <div class="card">
+    <h2 id="reportDetailTitle">Detalle</h2>
+    <div id="reportDetailBody"></div>
+  </div>
+</section>

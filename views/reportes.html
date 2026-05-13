@@ -1,0 +1,64 @@
+<section class="page">
+    <div class="detail-header">
+        <h1>Reportes</h1>
+        <a href="#/dashboard" class="btn-secondary"
+            style="text-decoration:none; display:inline-flex; align-items:center; justify-content:center;">
+            ← Volver
+        </a>
+    </div>
+    <div class="card report-filters">
+        <div>
+            <label>Desde</label>
+            <input type="date" id="reportFrom">
+        </div>
+
+        <div>
+            <label>Hasta</label>
+            <input type="date" id="reportTo">
+        </div>
+
+        <div class="report-actions">
+            <button id="btnLoadReports">Cargar reportes</button>
+        </div>
+    </div>
+
+    <div id="reportSummary" class="report-summary"></div>
+
+    <div class="card">
+        <h2>Consultas por período</h2>
+        <div id="reportConsultations"></div>
+    </div>
+
+    <div class="card">
+        <h2>Diagnósticos más frecuentes</h2>
+        <div id="reportDiagnoses"></div>
+    </div>
+
+    <div class="card">
+        <h2>Próximas citas</h2>
+        <div id="reportAppointments"></div>
+    </div>
+    <div class="card">
+        <h2>Consultas</h2>
+        <p>Detalle de consultas por período.</p>
+        <a href="#/reporte-detalle?module=consultas">Abrir detalle</a>
+    </div>
+
+    <div class="card">
+        <h2>Pacientes</h2>
+        <p>Detalle de pacientes registrados.</p>
+        <a href="#/reporte-detalle?module=pacientes">Abrir detalle</a>
+    </div>
+
+    <div class="card">
+        <h2>Citas</h2>
+        <p>Detalle de citas programadas.</p>
+        <a href="#/reporte-detalle?module=citas">Abrir detalle</a>
+    </div>
+
+    <div class="card">
+        <h2>Diagnósticos</h2>
+        <p>Detalle de diagnósticos más usados.</p>
+        <a href="#/reporte-detalle?module=diagnosticos">Abrir detalle</a>
+    </div>
+</section>
