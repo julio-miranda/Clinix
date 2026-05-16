@@ -1,0 +1,90 @@
+<section class="page">
+
+  <!-- HEADER -->
+  <div class="dashboard-header">
+
+    <div class="user-info">
+      <h1>Dashboard</h1>
+
+      <p>
+        Bienvenido:
+        <strong id="userFullName">
+          Usuario
+        </strong>
+      </p>
+
+      <small>
+        Rol:
+        <span id="userRole">
+          ---
+        </span>
+      </small>
+
+    </div>
+
+    <div class="logout-container">
+      <button id="logoutBtn">
+        Cerrar sesión
+      </button>
+    </div>
+
+  </div>
+
+
+  <!-- MENÚ PRINCIPAL -->
+  <div class="menu-grid">
+
+    <!-- PACIENTES -->
+    <div class="menu-card" data-roles="admin,recepcion,medico">
+
+      <h3>Pacientes</h3>
+
+      <p>
+        Registrar, editar y consultar pacientes.
+      </p>
+
+      <a href="#/pacientes">
+        Abrir módulo
+      </a>
+
+    </div>
+
+
+    <div class="menu-card" data-roles="admin">
+      <h3>Catálogos</h3>
+      <p>Administración de tablas maestras.</p>
+      <a href="#/catalogos">Abrir módulo</a>
+    </div>
+
+    <!-- CONSULTA MÉDICA -->
+    <div class="menu-card" data-roles="admin,medico">
+
+      <h3>Consulta médica</h3>
+
+      <p>
+        Registrar consultas clínicas.
+      </p>
+
+      <a href="#/consulta">
+        Abrir módulo
+      </a>
+
+    </div>
+
+    <div class="menu-card" data-roles="admin">
+      <h3>Usuarios</h3>
+      <p>Administración de usuarios.</p>
+      <a href="#/usuarios">Abrir módulo</a>
+    </div>
+
+    <!-- FUTURO: REPORTES -->
+    <div class="menu-grid">
+      <div class="menu-card" data-roles="admin,medico">
+        <h3>Reportes</h3>
+        <p>Resumen y estadísticas.</p>
+        <a href="#/reportes">Abrir módulo</a>
+      </div>
+    </div>
+  </div>
+
+</section>
