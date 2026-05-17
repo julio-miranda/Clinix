@@ -8,6 +8,7 @@ Thumbs.db
 
 # Respaldo de Base de Datos Local de CLINIX (Evita subir datos sensibles)
 backup_clinix.sql
+/backup_clinix.sql
 
 # Archivos temporales, respaldos generales y logs
 *.log
@@ -22,7 +23,7 @@ backup_clinix.sql
 !.env.example
 
 # =========================================================================
-# DEPENDENCIAS Y RECOPILACIONES (Node.js / ProducciÃ³n)
+# DEPENDENCIAS Y RECOPILACIONES (Node.js / Producción)
 # =========================================================================
 node_modules/
 dist/

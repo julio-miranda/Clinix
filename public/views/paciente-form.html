@@ -1,0 +1,58 @@
+<section class="page">
+
+  <div class="detail-header">
+    <div>
+      <h1>Formulario de paciente</h1>
+      <p>Crear o editar información del paciente</p>
+    </div>
+
+    <div class="toolbar">
+      <a href="#/pacientes" class="btn-secondary" style="text-decoration:none; display:inline-flex; align-items:center; justify-content:center;">
+        ← Volver
+      </a>
+    </div>
+  </div>
+
+  <form id="patientForm" class="card">
+
+    <input type="hidden" name="id" />
+
+    <label>MRN</label>
+    <input name="medical_record_number" />
+
+    <label>Nombre</label>
+    <input name="first_name" />
+
+    <label>Apellido</label>
+    <input name="last_name" />
+
+    <label>Fecha de nacimiento</label>
+    <input type="date" name="birth_date" />
+
+    <label>Sexo</label>
+    <select id="sex_id" name="sex_id"></select>
+
+    <label>Ocupación</label>
+    <input name="occupation" />
+
+    <label>Teléfono</label>
+    <input name="phone" />
+
+    <label>Dirección</label>
+    <input name="address" />
+
+    <label>
+      <input type="checkbox" name="active" />
+      Activo
+    </label>
+
+    <div class="form-actions">
+      <a href="#/pacientes" class="btn-secondary" style="text-decoration:none; display:inline-flex; align-items:center; justify-content:center;">
+        Cancelar
+      </a>
+
+      <button type="submit">Guardar</button>
+    </div>
+
+  </form>
+</section>
