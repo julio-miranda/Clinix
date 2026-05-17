@@ -1,3 +1,4 @@
+// js/models/usersModel.js
 import { supabase } from "../config/supabase.js";
 
 function escapeLike(value) {
@@ -12,11 +13,32 @@ function normalizeText(value) {
   return text.length ? text : null;
 }
 
+async function invokeAdminUsers(payload) {
+  const { data, error } = await supabase.functions.invoke("admin-users", {
+    body: payload
+  });
+
+  if (error) {
+    throw error;
+  }
+
+  if (!data) {
+    throw new Error("No hubo respuesta de la Edge Function.");
+  }
+
+  if (data.error) {
+    throw new Error(data.error);
+  }
+
+  return data;
+}
+
 async function attachRoles(users) {
   const list = Array.isArray(users) ? users : [];
   if (!list.length) return [];
 
   const userIds = list.map(u => u.id);
+
   const { data, error } = await supabase
     .from("app_user_roles")
     .select("user_id, role_id, app_roles(id, name, code)")
@@ -26,8 +48,12 @@ async function attachRoles(users) {
 
   const rolesByUserId = new Map();
   for (const row of data || []) {
-    if (!rolesByUserId.has(row.user_id)) rolesByUserId.set(row.user_id, []);
-    if (row.app_roles) rolesByUserId.get(row.user_id).push(row.app_roles);
+    if (!rolesByUserId.has(row.user_id)) {
+      rolesByUserId.set(row.user_id, []);
+    }
+    if (row.app_roles) {
+      rolesByUserId.get(row.user_id).push(row.app_roles);
+    }
   }
 
   return list.map(user => ({
@@ -66,6 +92,8 @@ export const UsersModel = {
   },
 
   async getUserById(id) {
+    if (!id) throw new Error("id es obligatorio.");
+
     const { data, error } = await supabase
       .from("app_users")
       .select("id, email, full_name, active, created_at, updated_at")
@@ -89,99 +117,59 @@ export const UsersModel = {
     };
   },
 
-  async createUser(payload) {
-    const { email, full_name, password, active = true } = payload || {};
+  async saveUser(payload) {
+    const {
+      action,       // "create" | "update"
+      user_id = null,
+      email,
+      full_name,
+      password = null,
+      active = true,
+      role = "RECEPCION",
+      role_codes = []
+    } = payload || {};
+
+    if (action !== "create" && action !== "update") {
+      throw new Error("action debe ser create o update.");
+    }
 
     if (!email) throw new Error("El correo es obligatorio.");
     if (!full_name) throw new Error("El nombre completo es obligatorio.");
-    if (!password) throw new Error("La contraseña es obligatoria.");
 
-    const { data, error } = await supabase.rpc("admin_create_user_account", {
-      p_email: normalizeText(email),
-      p_full_name: normalizeText(full_name),
-      p_password: String(password),
-      p_active: Boolean(active)
-    });
+    const body = {
+      action,
+      user_id,
+      email: normalizeText(email),
+      full_name: normalizeText(full_name),
+      active: Boolean(active),
+      role: String(role || "RECEPCION").trim().toUpperCase(),
+      role_codes: Array.isArray(role_codes) ? role_codes : []
+    };
 
-    if (error) throw error;
-    if (!data) throw new Error("No se pudo crear el usuario.");
+    if (password) {
+      body.password = String(password);
+    }
 
-    return data;
-  },
+    const result = await invokeAdminUsers(body);
 
-  async updateUserAccount(userId, payload) {
-    if (!userId) throw new Error("userId es obligatorio.");
+    if (!result.ok) {
+      throw new Error(result.error || "No se pudo guardar el usuario.");
+    }
 
-    const { email, full_name, active, password = null } = payload || {};
-
-    const { data, error } = await supabase.rpc("admin_update_user_account", {
-      p_user_id: userId,
-      p_email: email === undefined ? null : normalizeText(email),
-      p_full_name: full_name === undefined ? null : normalizeText(full_name),
-      p_active: active === undefined ? null : Boolean(active),
-      p_password: password ? String(password) : null
-    });
-
-    if (error) throw error;
-    if (!data) throw new Error("No se pudo actualizar el usuario.");
-
-    return data;
-  },
-
-  async replaceUserRoles(userId, roleIds = []) {
-    if (!userId) throw new Error("userId es obligatorio.");
-
-    const cleanRoleIds = Array.from(
-      new Set((roleIds || []).filter(Boolean).map(String))
-    );
-
-    const { error: deleteError } = await supabase
-      .from("app_user_roles")
-      .delete()
-      .eq("user_id", userId);
-
-    if (deleteError) throw deleteError;
-
-    if (!cleanRoleIds.length) return [];
-
-    const rows = cleanRoleIds.map(roleId => ({
-      user_id: userId,
-      role_id: roleId
-    }));
-
-    const { data, error } = await supabase
-      .from("app_user_roles")
-      .insert(rows)
-      .select(`
-        user_id,
-        role_id,
-        app_roles (
-          id,
-          name,
-          code
-        )
-      `);
-
-    if (error) throw error;
-    return data ?? [];
+    return result;
   },
 
   async deleteUser(id) {
     if (!id) throw new Error("id es obligatorio.");
 
-    const { error: rolesError } = await supabase
-      .from("app_user_roles")
-      .delete()
-      .eq("user_id", id);
+    const result = await invokeAdminUsers({
+      action: "delete",
+      user_id: id
+    });
 
-    if (rolesError) throw rolesError;
-
-    const { error } = await supabase
-      .from("app_users")
-      .delete()
-      .eq("id", id);
-
-    if (error) throw error;
+    if (!result.ok) {
+      throw new Error(result.error || "No se pudo eliminar el usuario.");
+    }
 
     return true;
   }

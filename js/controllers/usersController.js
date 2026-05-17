@@ -1,3 +1,4 @@
+// js/controllers/usersController.js
 import { UsersModel } from "../models/usersModel.js";
 
 const S = {
@@ -122,8 +123,8 @@ function validateForm() {
     if (!password) {
       throw new Error("La contraseña es obligatoria para crear el usuario.");
     }
-    if (password.length < 6) {
-      throw new Error("La contraseña debe tener al menos 6 caracteres.");
+    if (password.length < 12) {
+      throw new Error("La contraseña debe tener al menos 12 caracteres.");
     }
     if (password !== confirmPassword) {
       throw new Error("Las contraseñas no coinciden.");
@@ -133,18 +134,20 @@ function validateForm() {
       if (password !== confirmPassword) {
         throw new Error("Las contraseñas no coinciden.");
       }
-      if (password && password.length < 6) {
-        throw new Error("La contraseña debe tener al menos 6 caracteres.");
+      if (password && password.length < 12) {
+        throw new Error("La contraseña debe tener al menos 12 caracteres.");
       }
     }
   }
 }
 
-function getSelectedRoleIds() {
+function getSelectedRoleCodes() {
   const rolesSelect = el(S.rolesSelect);
   if (!rolesSelect) return [];
 
-  return Array.from(rolesSelect.selectedOptions).map(opt => opt.value);
+  return Array.from(rolesSelect.selectedOptions)
+    .map(opt => String(opt.value || "").trim().toLowerCase())
+    .filter(Boolean);
 }
 
 function renderRolesOptions() {
@@ -155,7 +158,7 @@ function renderRolesOptions() {
 
   state.roles.forEach(role => {
     const option = document.createElement("option");
-    option.value = role.id;
+    option.value = role.code;
     option.textContent = `${role.name} (${role.code})`;
     select.appendChild(option);
   });
@@ -166,7 +169,7 @@ function renderUsersTable() {
   if (!tbody) return;
 
   if (!state.users.length) {
-    tbody.innerHTML = `<tr><td colspan="7">No hay usuarios.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="8">No hay usuarios.</td></tr>`;
     return;
   }
 
@@ -183,6 +186,7 @@ function renderUsersTable() {
         <td>${user.updated_at ? new Date(user.updated_at).toLocaleString("es-SV") : "-"}</td>
         <td>
           <button class="btn-edit" data-action="edit" data-id="${escapeHtml(user.id)}">Editar</button>
+          <button class="btn-delete" data-action="delete" data-id="${escapeHtml(user.id)}">Eliminar</button>
         </td>
       </tr>
     `;
@@ -213,33 +217,26 @@ async function saveUser(event) {
     const fullName = getValue(S.fullName);
     const password = getValue(S.password);
     const active = getChecked(S.active);
-    const roleIds = getSelectedRoleIds();
+    const roleCodes = getSelectedRoleCodes();
 
-    let user;
+    const role = roleCodes[0] || "recepcion";
 
-    if (state.editingUserId) {
-      user = await UsersModel.updateUserAccount(state.editingUserId, {
-        email,
-        full_name: fullName,
-        active,
-        password: password || null
-      });
-    } else {
-      user = await UsersModel.createUser({
-        email,
-        full_name: fullName,
-        password,
-        active
-      });
-    }
-
-    await UsersModel.replaceUserRoles(user.id, roleIds);
+    const result = await UsersModel.saveUser({
+      action: state.editingUserId ? "update" : "create",
+      user_id: state.editingUserId,
+      email,
+      full_name: fullName,
+      password: password || null,
+      active,
+      role,
+      role_codes: roleCodes.length ? roleCodes : [role]
+    });
 
     closeModal();
     resetForm();
     await loadUsers();
 
-    showMessage("Usuario guardado correctamente.", "success");
+    showMessage(result.message || "Usuario guardado correctamente.", "success");
   } catch (error) {
     console.error(error);
     showMessage(error.message, "error");
@@ -248,7 +245,21 @@ async function saveUser(event) {
   }
 }
 
-function handleTableClick(event) {
+async function deleteUser(id) {
+  const ok = confirm("¿Desea eliminar este usuario? Esta acción no se puede deshacer.");
+  if (!ok) return;
+
+  try {
+    await UsersModel.deleteUser(id);
+    await loadUsers();
+    showMessage("Usuario eliminado correctamente.", "success");
+  } catch (error) {
+    console.error(error);
+    showMessage(error.message, "error");
+  }
+}
+
+async function handleTableClick(event) {
   const btn = event.target.closest("button");
   if (!btn) return;
 
@@ -268,13 +279,17 @@ function handleTableClick(event) {
 
     const rolesSelect = el(S.rolesSelect);
     if (rolesSelect) {
-      const userRoleIds = new Set((user.roles || []).map(r => String(r.id)));
+      const userRoleCodes = new Set((user.roles || []).map(r => String(r.code).toLowerCase()));
       Array.from(rolesSelect.options).forEach(opt => {
-        opt.selected = userRoleIds.has(String(opt.value));
+        opt.selected = userRoleCodes.has(String(opt.value).toLowerCase());
       });
     }
 
     openModal();
+  }
+
+  if (action === "delete") {
+    await deleteUser(id);
   }
 }
 

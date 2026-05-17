@@ -1,30 +1,100 @@
 # =========================================================================
-# ARCHIVOS LOCALES Y DE ENTORNO DE DESARROLLO (Editores y SO)
+# PERMITIR SOLO ARCHIVOS Y CARPETAS NECESARIAS
 # =========================================================================
+
+# Ignorar todo por defecto
+*
+
+# =========================================================================
+# PERMITIR ESTRUCTURA PRINCIPAL
+# =========================================================================
+
+!index.html
+!.gitignore
+
+# Carpetas necesarias
+!assets/
+!js/
+!views/
+!supabase/
+
+# Contenido interno
+!assets/**
+!js/**
+!views/**
+!supabase/**
+
+# =========================================================================
+# PERMITIR SOLO EDGE FUNCTION admin-users
+# =========================================================================
+
+# Bloquear todo dentro de supabase por defecto
+supabase/*
+!supabase/functions/
+
+# Bloquear todas las functions excepto admin-users
+supabase/functions/*
+!supabase/functions/admin-users/
+
+# Permitir Ãºnicamente archivos necesarios
+!supabase/functions/admin-users/index.ts
+!supabase/functions/admin-users/deno.js
+
+# =========================================================================
+# ARCHIVOS LOCALES Y DE ENTORNO DE DESARROLLO
+# =========================================================================
+
 .vscode/
 .idea/
 .DS_Store
 Thumbs.db
 
-# Respaldo de Base de Datos Local de CLINIX (Evita subir datos sensibles)
+# =========================================================================
+# RESPALDOS Y TEMPORALES
+# =========================================================================
+
 backup_clinix.sql
 /backup_clinix.sql
 
-# Archivos temporales, respaldos generales y logs
 *.log
 *.tmp
 *.bak
 
 # =========================================================================
-# VARIABLES DE ENTORNO (Contienen credenciales secretas)
+# VARIABLES DE ENTORNO
 # =========================================================================
+
 .env
 .env.*
 !.env.example
 
 # =========================================================================
-# DEPENDENCIAS Y RECOPILACIONES (Node.js / Producción)
+# DEPENDENCIAS Y BUILD
 # =========================================================================
+
 node_modules/
 dist/
 build/
+
+# =========================================================================
+# EXTRA SEGURIDAD
+# =========================================================================
+
+coverage/
+.cache/
+.npm/
+.parcel-cache/
+.next/
+.nuxt/
+.svelte-kit/
+
+# =========================================================================
+# BLOQUEAR ARCHIVOS SENSIBLES DE SUPABASE
+# =========================================================================
+
+supabase/.temp/
+supabase/config.toml
+supabase/.branches/
+supabase/migrations/
+supabase/seed.sql
+supabase/tests/
