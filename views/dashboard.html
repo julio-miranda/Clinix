@@ -1,54 +1,31 @@
+<!-- views/dashboard.html -->
 <section class="page">
 
-  <!-- HEADER -->
   <div class="dashboard-header">
-
     <div class="user-info">
       <h1>Dashboard</h1>
-
       <p>
         Bienvenido:
-        <strong id="userFullName">
-          Usuario
-        </strong>
+        <strong id="userFullName">Usuario</strong>
       </p>
-
       <small>
         Rol:
-        <span id="userRole">
-          ---
-        </span>
+        <span id="userRole">---</span>
       </small>
-
     </div>
 
     <div class="logout-container">
-      <button id="logoutBtn">
-        Cerrar sesión
-      </button>
+      <button id="logoutBtn" type="button">Cerrar sesión</button>
     </div>
-
   </div>
 
+  <div class="menu-grid" id="dashboardMenu">
 
-  <!-- MENÚ PRINCIPAL -->
-  <div class="menu-grid">
-
-    <!-- PACIENTES -->
     <div class="menu-card" data-roles="admin,recepcion,medico">
-
       <h3>Pacientes</h3>
-
-      <p>
-        Registrar, editar y consultar pacientes.
-      </p>
-
-      <a href="#/pacientes">
-        Abrir módulo
-      </a>
-
+      <p>Registrar, editar y consultar pacientes.</p>
+      <a href="#/pacientes">Abrir módulo</a>
     </div>
-
 
     <div class="menu-card" data-roles="admin">
       <h3>Catálogos</h3>
@@ -56,19 +33,10 @@
       <a href="#/catalogos">Abrir módulo</a>
     </div>
 
-    <!-- CONSULTA MÉDICA -->
     <div class="menu-card" data-roles="admin,medico">
-
       <h3>Consulta médica</h3>
-
-      <p>
-        Registrar consultas clínicas.
-      </p>
-
-      <a href="#/consulta">
-        Abrir módulo
-      </a>
-
+      <p>Registrar consultas clínicas.</p>
+      <a href="#/consulta">Abrir módulo</a>
     </div>
 
     <div class="menu-card" data-roles="admin">
@@ -77,14 +45,24 @@
       <a href="#/usuarios">Abrir módulo</a>
     </div>
 
-    <!-- FUTURO: REPORTES -->
-    <div class="menu-grid">
-      <div class="menu-card" data-roles="admin,medico">
-        <h3>Reportes</h3>
-        <p>Resumen y estadísticas.</p>
-        <a href="#/reportes">Abrir módulo</a>
-      </div>
+    <div class="menu-card" data-roles="admin,medico">
+      <h3>Reportes</h3>
+      <p>Resumen y estadísticas.</p>
+      <a href="#/reportes">Abrir módulo</a>
     </div>
+
+    <div class="menu-card" data-roles="admin">
+      <h3>Auditoría</h3>
+      <p>Consulta de registros del sistema.</p>
+      <a href="#/auditoria">Abrir módulo</a>
+    </div>
+
+    <div class="menu-card" data-roles="admin,medico,recepcion">
+      <h3>Consultas</h3>
+      <p>Listado de consultas registradas.</p>
+      <a href="#/consultas">Abrir módulo</a>
+    </div>
+
   </div>
 
 </section>

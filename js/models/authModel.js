@@ -1,3 +1,4 @@
+//js/models/authModel.js
 import { supabase } from "../config/supabase.js";
 
 const ROLE_PRIORITY = ["admin", "medico", "recepcion"];

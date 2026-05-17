@@ -1,3 +1,4 @@
+// js/controllers/authController.js
 import {
   login,
   logout,
@@ -7,7 +8,9 @@ import {
 
 const SUPABASE_AUTH_PREFIX = "sb-";
 const SESSION_USER_KEY = "user";
+
 const VALID_ROLES = new Set(["admin", "medico", "recepcion"]);
+
 const ROLE_LABELS = {
   admin: "ADMIN",
   medico: "MEDICO",
@@ -21,7 +24,7 @@ function normalizeRole(role) {
 
 function buildSessionUser(authUser, profile) {
   if (!authUser?.id || !profile?.id || authUser.id !== profile.id) {
-    throw new Error("Sesion no valida.");
+    throw new Error("Sesión no válida.");
   }
 
   if (profile.active === false) {
@@ -30,7 +33,7 @@ function buildSessionUser(authUser, profile) {
 
   const role = normalizeRole(profile.role);
   if (!role) {
-    throw new Error("Rol invalido o no asignado.");
+    throw new Error("Rol inválido o no asignado.");
   }
 
   return {
@@ -51,16 +54,6 @@ function saveSessionUser(user) {
   sessionStorage.setItem(SESSION_USER_KEY, JSON.stringify(user));
 }
 
-async function clearRemoteSession() {
-  try {
-    await logout();
-  } catch (err) {
-    console.error("LOGOUT ERROR:", err);
-  } finally {
-    clearLocalAuthArtifacts();
-  }
-}
-
 export function clearLocalAuthArtifacts() {
   try {
     sessionStorage.removeItem(SESSION_USER_KEY);
@@ -77,7 +70,17 @@ export function clearLocalAuthArtifacts() {
 
     keysToRemove.forEach(key => localStorage.removeItem(key));
   } catch (err) {
-    console.error("ERROR LIMPIANDO SESION:", err);
+    console.error("ERROR LIMPIANDO SESIÓN:", err);
+  }
+}
+
+async function clearRemoteSession() {
+  try {
+    await logout();
+  } catch (err) {
+    console.error("LOGOUT ERROR:", err);
+  } finally {
+    clearLocalAuthArtifacts();
   }
 }
 
@@ -118,9 +121,22 @@ export async function initLoginView() {
   }
 }
 
-export function initDashboardView() {
-  const user = getSessionUser();
-  if (!user) return;
+export async function initDashboardView() {
+  let user = getSessionUser();
+
+  if (!user) {
+    try {
+      user = await refreshSessionUser();
+    } catch (err) {
+      console.error("DASHBOARD SESSION ERROR:", err);
+      user = null;
+    }
+  }
+
+  if (!user) {
+    window.location.hash = "#/login";
+    return;
+  }
 
   const nameLabel = document.getElementById("userFullName");
   if (nameLabel) nameLabel.textContent = user.full_name || "Usuario";
@@ -149,7 +165,7 @@ export async function handleLogin(event) {
     const password = form.password.value;
 
     if (!email || !password) {
-      alert("Complete el correo y la contrasena.");
+      alert("Complete el correo y la contraseña.");
       return;
     }
 
@@ -157,21 +173,21 @@ export async function handleLogin(event) {
 
     if (error) {
       clearLocalAuthArtifacts();
-      alert("Error al iniciar sesion: " + error.message);
+      alert("Error al iniciar sesión: " + error.message);
       return;
     }
 
     const authUser = data?.user;
     if (!authUser) {
       await clearRemoteSession();
-      alert("Usuario invalido.");
+      alert("Usuario inválido.");
       return;
     }
 
     const profile = await getProfile(authUser.id);
     if (!profile) {
       await clearRemoteSession();
-      alert("Perfil de aplicacion no encontrado.");
+      alert("Perfil de aplicación no encontrado.");
       return;
     }
 
@@ -265,17 +281,15 @@ export async function loadCurrentUser() {
 
 function filterMenuByRole(role) {
   const currentRole = normalizeRole(role);
-  const cards = document.querySelectorAll(".menu-card");
+  const cards = document.querySelectorAll("#dashboardMenu .menu-card");
 
   cards.forEach(card => {
-    const allowedRoles = (card.dataset.roles || "")
+    const allowedRoles = String(card.dataset.roles || "")
       .split(",")
       .map(r => normalizeRole(r))
       .filter(Boolean);
 
-    card.style.display =
-      !allowedRoles.length || allowedRoles.includes(currentRole)
-        ? ""
-        : "none";
+    const visible = !allowedRoles.length || allowedRoles.includes(currentRole);
+    card.style.display = visible ? "" : "none";
   });
 }
