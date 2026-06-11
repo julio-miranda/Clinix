@@ -13,13 +13,123 @@ function normalizeText(value) {
   return text.length ? text : null;
 }
 
+function normalizeEmail(value) {
+  return String(value ?? "").trim().toLowerCase();
+}
+
+function normalizeRole(value) {
+  return String(value ?? "").trim().toUpperCase() || "RECEPCION";
+}
+
+function normalizeRoleCode(value) {
+  return String(value ?? "").trim().toLowerCase();
+}
+
+function dedupeRoleCodes(values) {
+  if (!Array.isArray(values)) return [];
+  return [...new Set(
+    values
+      .map(normalizeRoleCode)
+      .filter(Boolean),
+  )];
+}
+
+function extractMessageFromBody(body) {
+  if (!body || typeof body !== "object") return null;
+
+  const stage = body.stage ? ` [${body.stage}]` : "";
+  const error =
+    body.error ||
+    body.message ||
+    body.details?.message ||
+    body.details?.error ||
+    body.details?.hint ||
+    body.details?.code ||
+    null;
+
+  if (error) return `${error}${stage}`;
+
+  try {
+    return `${JSON.stringify(body)}${stage}`;
+  } catch {
+    return stage ? `Error${stage}` : "Error desconocido";
+  }
+}
+
+async function readFunctionError(error) {
+  try {
+    const context = error?.context;
+
+    if (context?.json && typeof context.json === "function") {
+      const body = await context.json();
+      const message = extractMessageFromBody(body);
+      if (message) return message;
+    }
+
+    if (context?.text && typeof context.text === "function") {
+      const text = await context.text();
+      if (text) return text;
+    }
+  } catch (e) {
+    console.error("No se pudo leer el cuerpo de error de la Edge Function:", e);
+  }
+
+  return error?.message || "Error desconocido en la Edge Function.";
+}
+
+async function getAccessToken() {
+  const { data, error } = await supabase.auth.getSession();
+
+  if (error) throw error;
+
+  const token = data?.session?.access_token || null;
+  if (!token) {
+    throw new Error("Sesión inválida o expirada. Inicia sesión de nuevo.");
+  }
+
+  return token;
+}
+
+function buildAdminUsersPayload(payload) {
+  const userId = normalizeText(
+    payload?.user_id ?? payload?.userId ?? payload?.id,
+  );
+
+  const email = normalizeEmail(payload?.email);
+  const fullName = normalizeText(payload?.full_name ?? payload?.fullName);
+  const password = normalizeText(payload?.password);
+
+  const role = normalizeRole(payload?.role);
+  const roleCodes = dedupeRoleCodes(payload?.role_codes);
+
+  return {
+    action: String(payload?.action ?? "").trim().toLowerCase(),
+    user_id: userId,
+    userId,
+    id: userId,
+    email: payload?.action === "delete" ? null : email || null,
+    full_name: payload?.action === "delete" ? null : fullName,
+    password: payload?.action === "delete" ? null : password,
+    active: payload?.active !== false,
+    role,
+    role_codes: roleCodes.length ? roleCodes : [role.toLowerCase()],
+  };
+}
+
 async function invokeAdminUsers(payload) {
+  const accessToken = await getAccessToken();
+  const body = buildAdminUsersPayload(payload);
+
   const { data, error } = await supabase.functions.invoke("admin-users", {
-    body: payload
+    body,
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
   });
 
   if (error) {
-    throw error;
+    const detail = await readFunctionError(error);
+    throw new Error(detail);
   }
 
   if (!data) {
@@ -27,7 +137,15 @@ async function invokeAdminUsers(payload) {
   }
 
   if (data.error) {
-    throw new Error(data.error);
+    const stage = data.stage ? ` [${data.stage}]` : "";
+    const details =
+      typeof data.details === "string"
+        ? `: ${data.details}`
+        : data.details?.message
+          ? `: ${data.details.message}`
+          : "";
+
+    throw new Error(`${data.error}${details}${stage}`);
   }
 
   return data;
@@ -37,7 +155,7 @@ async function attachRoles(users) {
   const list = Array.isArray(users) ? users : [];
   if (!list.length) return [];
 
-  const userIds = list.map(u => u.id);
+  const userIds = list.map((u) => u.id);
 
   const { data, error } = await supabase
     .from("app_user_roles")
@@ -56,9 +174,9 @@ async function attachRoles(users) {
     }
   }
 
-  return list.map(user => ({
+  return list.map((user) => ({
     ...user,
-    roles: rolesByUserId.get(user.id) || []
+    roles: rolesByUserId.get(user.id) || [],
   }));
 }
 
@@ -112,50 +230,30 @@ export const UsersModel = {
     return {
       ...data,
       roles: (rolesData || [])
-        .map(row => row.app_roles)
-        .filter(Boolean)
+        .map((row) => row.app_roles)
+        .filter(Boolean),
     };
   },
 
   async saveUser(payload) {
-    const {
-      action,       // "create" | "update"
-      user_id = null,
-      email,
-      full_name,
-      password = null,
-      active = true,
-      role = "RECEPCION",
-      role_codes = []
-    } = payload || {};
+    const action = String(payload?.action ?? "").trim().toLowerCase();
 
-    if (action !== "create" && action !== "update") {
-      throw new Error("action debe ser create o update.");
+    if (action !== "create" && action !== "update" && action !== "delete") {
+      throw new Error("action debe ser create, update o delete.");
     }
 
-    if (!email) throw new Error("El correo es obligatorio.");
-    if (!full_name) throw new Error("El nombre completo es obligatorio.");
+    if (action !== "delete") {
+      if (!payload?.email) throw new Error("El correo es obligatorio.");
+      if (!payload?.full_name) throw new Error("El nombre completo es obligatorio.");
+    }
 
-    const body = {
-      action,
-      user_id,
-      email: normalizeText(email),
-      full_name: normalizeText(full_name),
-      active: Boolean(active),
-      role: String(role || "RECEPCION").trim().toUpperCase(),
-      role_codes: Array.isArray(role_codes) ? role_codes : []
-    };
+    const body = buildAdminUsersPayload(payload);
 
-    if (password) {
-      body.password = String(password);
+    if (action !== "delete" && body.password) {
+      body.password = String(body.password);
     }
 
     const result = await invokeAdminUsers(body);
-
-    if (!result.ok) {
-      throw new Error(result.error || "No se pudo guardar el usuario.");
-    }
-
     return result;
   },
 
@@ -164,13 +262,11 @@ export const UsersModel = {
 
     const result = await invokeAdminUsers({
       action: "delete",
-      user_id: id
+      user_id: id,
+      userId: id,
+      id,
     });
 
-    if (!result.ok) {
-      throw new Error(result.error || "No se pudo eliminar el usuario.");
-    }
-
-    return true;
-  }
+    return result;
+  },
 };

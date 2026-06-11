@@ -17,13 +17,13 @@ const S = {
   btnReset: "#btnLimpiarUsuario",
   btnCancel: "#btnCancelarUsuario",
   modal: "#usuarioModal",
-  alertBox: "#usuariosAlert"
+  alertBox: "#usuariosAlert",
 };
 
 const state = {
   users: [],
   roles: [],
-  editingUserId: null
+  editingUserId: null,
 };
 
 function el(selector) {
@@ -57,6 +57,10 @@ function escapeHtml(str) {
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#39;");
+}
+
+function isValidPassword(password) {
+  return typeof password === "string" && password.length >= 12;
 }
 
 function showMessage(message, type = "info") {
@@ -104,7 +108,7 @@ function resetForm() {
 
   const rolesSelect = el(S.rolesSelect);
   if (rolesSelect) {
-    Array.from(rolesSelect.options).forEach(opt => {
+    Array.from(rolesSelect.options).forEach((opt) => {
       opt.selected = false;
     });
   }
@@ -123,7 +127,7 @@ function validateForm() {
     if (!password) {
       throw new Error("La contraseña es obligatoria para crear el usuario.");
     }
-    if (password.length < 12) {
+    if (!isValidPassword(password)) {
       throw new Error("La contraseña debe tener al menos 12 caracteres.");
     }
     if (password !== confirmPassword) {
@@ -134,7 +138,7 @@ function validateForm() {
       if (password !== confirmPassword) {
         throw new Error("Las contraseñas no coinciden.");
       }
-      if (password && password.length < 12) {
+      if (password && !isValidPassword(password)) {
         throw new Error("La contraseña debe tener al menos 12 caracteres.");
       }
     }
@@ -146,7 +150,7 @@ function getSelectedRoleCodes() {
   if (!rolesSelect) return [];
 
   return Array.from(rolesSelect.selectedOptions)
-    .map(opt => String(opt.value || "").trim().toLowerCase())
+    .map((opt) => String(opt.value || "").trim().toLowerCase())
     .filter(Boolean);
 }
 
@@ -156,7 +160,7 @@ function renderRolesOptions() {
 
   select.replaceChildren();
 
-  state.roles.forEach(role => {
+  state.roles.forEach((role) => {
     const option = document.createElement("option");
     option.value = role.code;
     option.textContent = `${role.name} (${role.code})`;
@@ -173,10 +177,11 @@ function renderUsersTable() {
     return;
   }
 
-  tbody.innerHTML = state.users.map(user => {
-    const roles = (user.roles || []).map(r => r.name).join(", ");
+  tbody.innerHTML = state.users
+    .map((user) => {
+      const roles = (user.roles || []).map((r) => r.name).join(", ");
 
-    return `
+      return `
       <tr>
         <td>${escapeHtml(user.full_name)}</td>
         <td>${escapeHtml(user.email)}</td>
@@ -190,7 +195,8 @@ function renderUsersTable() {
         </td>
       </tr>
     `;
-  }).join("");
+    })
+    .join("");
 }
 
 async function loadRoles() {
@@ -218,18 +224,19 @@ async function saveUser(event) {
     const password = getValue(S.password);
     const active = getChecked(S.active);
     const roleCodes = getSelectedRoleCodes();
-
     const role = roleCodes[0] || "recepcion";
 
     const result = await UsersModel.saveUser({
       action: state.editingUserId ? "update" : "create",
       user_id: state.editingUserId,
+      userId: state.editingUserId,
+      id: state.editingUserId,
       email,
       full_name: fullName,
       password: password || null,
       active,
       role,
-      role_codes: roleCodes.length ? roleCodes : [role]
+      role_codes: roleCodes.length ? roleCodes : [role],
     });
 
     closeModal();
@@ -246,7 +253,9 @@ async function saveUser(event) {
 }
 
 async function deleteUser(id) {
-  const ok = confirm("¿Desea eliminar este usuario? Esta acción no se puede deshacer.");
+  const ok = confirm(
+    "¿Desea eliminar este usuario? Esta acción no se puede deshacer.",
+  );
   if (!ok) return;
 
   try {
@@ -267,7 +276,7 @@ async function handleTableClick(event) {
   const id = btn.dataset.id;
 
   if (action === "edit") {
-    const user = state.users.find(u => u.id === id);
+    const user = state.users.find((u) => u.id === id);
     if (!user) return;
 
     state.editingUserId = user.id;
@@ -279,8 +288,10 @@ async function handleTableClick(event) {
 
     const rolesSelect = el(S.rolesSelect);
     if (rolesSelect) {
-      const userRoleCodes = new Set((user.roles || []).map(r => String(r.code).toLowerCase()));
-      Array.from(rolesSelect.options).forEach(opt => {
+      const userRoleCodes = new Set(
+        (user.roles || []).map((r) => String(r.code).toLowerCase()),
+      );
+      Array.from(rolesSelect.options).forEach((opt) => {
         opt.selected = userRoleCodes.has(String(opt.value).toLowerCase());
       });
     }

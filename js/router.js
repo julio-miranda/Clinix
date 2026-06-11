@@ -113,6 +113,8 @@ async function loadView(viewPath, token) {
     throw new Error("No existe el contenedor #app en el DOM.");
   }
 
+  console.log("[router] Cargando vista:", viewPath);
+
   const response = await fetch(viewPath, { cache: "no-store" });
   if (!response.ok) {
     throw new Error(`No se pudo cargar la vista: ${viewPath}`);
@@ -131,6 +133,7 @@ async function loadView(viewPath, token) {
 function getCurrentRoute() {
   const rawHash = window.location.hash || "#/login";
   const [hashPath, queryString = ""] = rawHash.split("?");
+
   return {
     hashPath,
     queryString,
@@ -144,16 +147,26 @@ export async function router() {
   try {
     const { hashPath, queryString, route } = getCurrentRoute();
 
+    console.log("[router] Ruta actual:", hashPath);
+    console.log("[router] Ruta pública:", !!route.public);
+    console.log("[router] Roles permitidos:", route.roles || "sin restricción");
+
+    const user = getSessionUser();
+    console.log("[router] Usuario en sessionStorage:", user);
+
     if (!route.public) {
+      console.log("[router] Verificando autenticación...");
       const authorized = await requireAuth();
+      console.log("[router] requireAuth() =>", authorized);
+
       if (!authorized || token !== navigationToken) return;
     }
 
-    const user = getSessionUser();
     const currentRole = String(user?.role || "").toLowerCase();
 
     if (route.roles && route.roles.length && user) {
       if (!route.roles.includes(currentRole)) {
+        console.warn("[router] Acceso denegado. Rol actual:", currentRole);
         alert("No tienes permisos para acceder aquí.");
         redirectByRole(currentRole);
         return;
@@ -166,6 +179,7 @@ export async function router() {
     const params = new URLSearchParams(queryString);
 
     if (typeof route.init === "function") {
+      console.log("[router] Ejecutando init de la vista...");
       await route.init(params);
     }
 

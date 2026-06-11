@@ -11,14 +11,14 @@ function normalizeRoleRow(row) {
   const role = Array.isArray(row?.app_roles)
     ? row.app_roles[0]
     : row?.app_roles || row;
-  const code = normalizeRoleCode(role?.code);
 
+  const code = normalizeRoleCode(role?.code);
   if (!code) return null;
 
   return {
     id: role.id ?? row?.role_id ?? null,
     code,
-    name: role.name ?? code
+    name: role.name ?? code,
   };
 }
 
@@ -26,7 +26,7 @@ function pickPrimaryRole(roles) {
   const roleCodes = new Set(
     (roles || [])
       .map(role => normalizeRoleCode(role?.code))
-      .filter(Boolean)
+      .filter(Boolean),
   );
 
   return ROLE_PRIORITY.find(role => roleCodes.has(role)) || null;
@@ -35,7 +35,7 @@ function pickPrimaryRole(roles) {
 export async function login(email, password) {
   return await supabase.auth.signInWithPassword({
     email,
-    password
+    password,
   });
 }
 
@@ -43,16 +43,35 @@ export async function logout() {
   return await supabase.auth.signOut();
 }
 
-export async function getCurrentUser() {
-  const { data, error } = await supabase.auth.getUser();
-  const message = String(error?.message || "").toLowerCase();
+export async function getSessionAccessToken() {
+  const { data, error } = await supabase.auth.getSession();
 
-  if (message.includes("session") && message.includes("missing")) {
+  if (error) throw error;
+
+  return data?.session?.access_token || null;
+}
+
+export async function getCurrentUser() {
+  const {
+    data: { session },
+    error: sessionError,
+  } = await supabase.auth.getSession();
+
+  if (sessionError) {
+    throw sessionError;
+  }
+
+  if (!session?.access_token) {
     return null;
   }
 
+  const {
+    data: { user },
+    error,
+  } = await supabase.auth.getUser(session.access_token);
+
   if (error) throw error;
-  return data?.user || null;
+  return user || null;
 }
 
 export async function getProfile(userId) {
@@ -75,7 +94,7 @@ export async function getProfile(userId) {
     return {
       ...appUser,
       role: null,
-      roles: []
+      roles: [],
     };
   }
 
@@ -93,6 +112,6 @@ export async function getProfile(userId) {
   return {
     ...appUser,
     role: pickPrimaryRole(roles),
-    roles
+    roles,
   };
 }
