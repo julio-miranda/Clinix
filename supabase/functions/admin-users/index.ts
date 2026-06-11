@@ -488,8 +488,19 @@ async function softDeleteUser(admin: SupabaseAdminClient, userId: string) {
 
   if (profileError) throw profileError;
 
+  // === MODIFICACIÓN CON TOLERANCIA A FALLOS ===
   const { error: authDeleteError } = await admin.auth.admin.deleteUser(userId);
-  if (authDeleteError) throw authDeleteError;
+  if (authDeleteError) {
+    const errorMsg = authDeleteError.message?.toLowerCase() || "";
+    const isNotFound = errorMsg.includes("not found") || (authDeleteError as any).status === 404;
+    
+    // Si el error es otra cosa (ej. pérdida de conexión), lanzamos el error.
+    // Si es simplemente que ya no existía en Auth, lo ignoramos y dejamos que termine con éxito.
+    if (!isNotFound) {
+      throw authDeleteError;
+    }
+    console.warn(`Aviso en softDelete: El usuario Auth con ID ${userId} ya no existía en GoTrue.`);
+  }
 }
 
 async function cleanupOnFailure(
