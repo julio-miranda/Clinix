@@ -4,7 +4,8 @@ import {
   getConsultationsByRange,
   getTopDiagnoses,
   getPendingAppointments,
-  getNewPatientsByRange
+  getNewPatientsByRange,
+  getTicketsByRange
 } from "../models/reportModel.js";
 
 function escapeHtml(str) {
@@ -30,7 +31,7 @@ function formatDateTime(value) {
 function formatPatient(data) {
   if (!data) return "-";
 
-  const patient = data.patient ?? data;
+  const patient = data.patient ?? data.patients ?? data;
 
   const mrn = patient.medical_record_number ?? "";
   const firstName = patient.first_name ?? "";
@@ -83,14 +84,16 @@ async function loadAllReports() {
   const consultationsContainer = document.getElementById("reportConsultations");
   const diagnosesContainer = document.getElementById("reportDiagnoses");
   const appointmentsContainer = document.getElementById("reportAppointments");
+  const ticketsContainer = document.getElementById("reportTickets");
 
   try {
-    const [summary, consultations, diagnoses, appointments, patients] = await Promise.all([
+    const [summary, consultations, diagnoses, appointments, patients, tickets] = await Promise.all([
       getDashboardSummary(),
       getConsultationsByRange(from, to),
       getTopDiagnoses(10),
       getPendingAppointments(from, to),
-      getNewPatientsByRange(from, to)
+      getNewPatientsByRange(from, to),
+      getTicketsByRange(from, to)
     ]);
 
     if (summaryContainer) {
@@ -101,6 +104,8 @@ async function loadAllReports() {
           <div class="summary-card"><h3>${summary.total_appointments ?? 0}</h3><p>Citas totales</p></div>
           <div class="summary-card"><h3>${summary.pending_appointments ?? 0}</h3><p>Citas pendientes</p></div>
           <div class="summary-card"><h3>${patients.length}</h3><p>Pacientes nuevos</p></div>
+          <div class="summary-card"><h3>${summary.total_tickets ?? 0}</h3><p>Tickets</p></div>
+          <div class="summary-card"><h3>$${Number(summary.total_collected ?? 0).toFixed(2)}</h3><p>Total cobrado</p></div>
         </div>
       `;
     }
@@ -108,6 +113,7 @@ async function loadAllReports() {
     if (consultationsContainer) consultationsContainer.innerHTML = renderConsultationsTable(consultations);
     if (diagnosesContainer) diagnosesContainer.innerHTML = renderDiagnosesTable(diagnoses);
     if (appointmentsContainer) appointmentsContainer.innerHTML = renderAppointmentsTable(appointments);
+    if (ticketsContainer) ticketsContainer.innerHTML = renderTicketsTable(tickets);
   } catch (error) {
     console.error("ERROR REPORTES:", error);
 
@@ -115,6 +121,7 @@ async function loadAllReports() {
     if (consultationsContainer) consultationsContainer.innerHTML = "";
     if (diagnosesContainer) diagnosesContainer.innerHTML = "";
     if (appointmentsContainer) appointmentsContainer.innerHTML = "";
+    if (ticketsContainer) ticketsContainer.innerHTML = "";
   }
 }
 
@@ -192,6 +199,35 @@ function renderAppointmentsTable(rows) {
             <td>${escapeHtml(formatPatient(row))}</td>
             <td>${escapeHtml(row.reason || "-")}</td>
             <td>${escapeHtml(row.status_name || "-")}</td>
+          </tr>
+        `).join("")}
+      </tbody>
+    </table>
+  `;
+}
+
+function renderTicketsTable(rows) {
+  if (!rows?.length) return "<p>No hay tickets en el período seleccionado.</p>";
+
+  return `
+    <table>
+      <thead>
+        <tr>
+          <th>Fecha</th>
+          <th>Paciente</th>
+          <th>Monto</th>
+          <th>Método</th>
+          <th>Estado</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${rows.map((row) => `
+          <tr>
+            <td>${escapeHtml(formatDateTime(row.issued_at))}</td>
+            <td>${escapeHtml(formatPatient(row))}</td>
+            <td>$${Number(row.amount ?? 0).toFixed(2)} ${escapeHtml(row.currency || "")}</td>
+            <td>${escapeHtml(row.payment_method || "-")}</td>
+            <td>${escapeHtml(row.payment_status || "-")}</td>
           </tr>
         `).join("")}
       </tbody>

@@ -8,11 +8,15 @@ export async function getDashboardSummary() {
     .single();
 
   if (error) throw error;
+
   return data ?? {
     total_patients: 0,
     total_encounters: 0,
     total_appointments: 0,
-    pending_appointments: 0
+    pending_appointments: 0,
+    total_tickets: 0,
+    paid_tickets: 0,
+    total_collected: 0
   };
 }
 
@@ -89,6 +93,44 @@ export async function getNewPatientsByRange(from, to) {
 
   if (from) query = query.gte("created_at", from);
   if (to) query = query.lte("created_at", to);
+
+  const { data, error } = await query;
+  if (error) throw error;
+  return data ?? [];
+}
+
+export async function getTicketsByRange(from, to) {
+  let query = supabase
+    .from("consultation_tickets")
+    .select(`
+      id,
+      encounter_id,
+      patient_id,
+      issued_by,
+      amount,
+      currency,
+      payment_status,
+      payment_method,
+      reference,
+      notes,
+      issued_at,
+      paid_at,
+      patient:patients (
+        id,
+        medical_record_number,
+        first_name,
+        last_name
+      ),
+      encounter:encounters (
+        id,
+        encounter_at,
+        chief_complaint
+      )
+    `)
+    .order("issued_at", { ascending: false });
+
+  if (from) query = query.gte("issued_at", from);
+  if (to) query = query.lte("issued_at", to);
 
   const { data, error } = await query;
   if (error) throw error;

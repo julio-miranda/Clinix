@@ -1,8 +1,10 @@
+// js/controllers/reportDetailController.js
 import {
   getConsultationsDetail,
   getPatientsDetail,
   getAppointmentsDetail,
-  getDiagnosesDetail
+  getDiagnosesDetail,
+  getTicketsDetail
 } from "../models/reportDetailModel.js";
 
 function escapeHtml(str) {
@@ -14,14 +16,37 @@ function escapeHtml(str) {
     .replaceAll("'", "&#39;");
 }
 
+function parseHashParams() {
+  const hash = window.location.hash || "";
+  const qIndex = hash.indexOf("?");
+  if (qIndex === -1) return new URLSearchParams();
+
+  return new URLSearchParams(hash.slice(qIndex + 1));
+}
+
+function getParamsSafe(params) {
+  if (params instanceof URLSearchParams) return params;
+  return parseHashParams();
+}
+
 export async function initReportDetailView(params = new URLSearchParams()) {
-  const moduleFromUrl = params.get("module") || "consultas";
+  params = getParamsSafe(params);
+
+  const moduleFromUrl = (params.get("module") || "consultas").toLowerCase();
 
   const moduleSelect = document.getElementById("reportModule");
   const fromInput = document.getElementById("reportFrom");
   const toInput = document.getElementById("reportTo");
   const btnLoad = document.getElementById("btnLoadReportDetail");
   const subtitle = document.getElementById("reportDetailSubtitle");
+  const title = document.getElementById("reportDetailTitle");
+  const summary = document.getElementById("reportDetailSummary");
+  const body = document.getElementById("reportDetailBody");
+
+  if (!body) {
+    console.error("reportDetailBody no existe en el HTML.");
+    return;
+  }
 
   setDefaultDates(fromInput, toInput);
 
@@ -43,17 +68,16 @@ export async function initReportDetailView(params = new URLSearchParams()) {
   await loadDetailReport();
 
   async function loadDetailReport() {
-    const module = moduleSelect?.value || "consultas";
+    const module = (moduleSelect?.value || moduleFromUrl || "consultas").toLowerCase();
     const from = fromInput?.value || "";
     const to = toInput?.value || "";
 
     if (subtitle) subtitle.textContent = getModuleLabel(module);
 
-    const title = document.getElementById("reportDetailTitle");
-    const summary = document.getElementById("reportDetailSummary");
-    const body = document.getElementById("reportDetailBody");
-
     try {
+      body.innerHTML = "<p>Cargando...</p>";
+      if (summary) summary.innerHTML = "";
+
       if (module === "consultas") {
         const rows = await getConsultationsDetail(from, to);
         if (title) title.textContent = "Detalle de consultas";
@@ -62,7 +86,8 @@ export async function initReportDetailView(params = new URLSearchParams()) {
           { label: "Pacientes distintos", value: countUnique(rows.map(r => r.patient_id)) },
           { label: "Diagnósticos", value: countDiagnoses(rows) }
         ]);
-        if (body) body.innerHTML = renderConsultations(rows);
+        body.innerHTML = renderConsultations(rows);
+        return;
       }
 
       if (module === "pacientes") {
@@ -73,7 +98,8 @@ export async function initReportDetailView(params = new URLSearchParams()) {
           { label: "Activos", value: rows.filter(r => r.active).length },
           { label: "Inactivos", value: rows.filter(r => !r.active).length }
         ]);
-        if (body) body.innerHTML = renderPatients(rows);
+        body.innerHTML = renderPatients(rows);
+        return;
       }
 
       if (module === "citas") {
@@ -84,7 +110,8 @@ export async function initReportDetailView(params = new URLSearchParams()) {
           { label: "Programadas", value: rows.filter(r => r.appointment_statuses?.code === "SCHEDULED").length },
           { label: "Canceladas", value: rows.filter(r => r.appointment_statuses?.code === "CANCELLED").length }
         ]);
-        if (body) body.innerHTML = renderAppointments(rows);
+        body.innerHTML = renderAppointments(rows);
+        return;
       }
 
       if (module === "diagnosticos") {
@@ -93,14 +120,37 @@ export async function initReportDetailView(params = new URLSearchParams()) {
         if (summary) summary.innerHTML = renderSummaryCards([
           { label: "Diagnósticos", value: rows.length },
           { label: "Principales", value: rows.filter(r => r.is_primary).length },
-          { label: "Pacientes distintos", value: countUnique(rows.map(r => r.encounters?.patient_id)) }
+          { label: "Pacientes distintos", value: countUnique(rows.map(r => r.encounters?.patients?.id)) }
         ]);
-        if (body) body.innerHTML = renderDiagnoses(rows);
+        body.innerHTML = renderDiagnoses(rows);
+        return;
       }
+
+      if (module === "tickets") {
+        const rows = await getTicketsDetail(from, to);
+        if (title) title.textContent = "Detalle de tickets";
+        if (summary) summary.innerHTML = renderSummaryCards([
+          { label: "Tickets", value: rows.length },
+          { label: "Pagados", value: rows.filter(r => String(r.payment_status || "").toUpperCase() === "PAID").length },
+          {
+            label: "Total cobrado",
+            value: `$${rows
+              .filter(r => String(r.payment_status || "").toUpperCase() === "PAID")
+              .reduce((acc, r) => acc + Number(r.amount || 0), 0)
+              .toFixed(2)}`
+          }
+        ]);
+        body.innerHTML = renderTickets(rows);
+        return;
+      }
+
+      if (title) title.textContent = "Detalle";
+      body.innerHTML = "<p>Módulo no reconocido.</p>";
     } catch (error) {
       console.error("ERROR REPORT DETAIL:", error);
+      if (title) title.textContent = "Detalle";
       if (summary) summary.innerHTML = `<p>No se pudo cargar el resumen.</p>`;
-      if (body) body.innerHTML = `<p>No se pudo cargar el detalle.</p>`;
+      body.innerHTML = `<p>No se pudo cargar el detalle: ${escapeHtml(error.message || "Error desconocido")}.</p>`;
     }
   }
 }
@@ -109,8 +159,14 @@ function setDefaultDates(fromInput, toInput) {
   const today = new Date();
   const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
 
-  if (fromInput) fromInput.value = firstDay.toISOString().slice(0, 10);
-  if (toInput) toInput.value = today.toISOString().slice(0, 10);
+  const formatLocal = (date) => {
+    const offset = date.getTimezoneOffset();
+    const local = new Date(date.getTime() - offset * 60 * 1000);
+    return local.toISOString().slice(0, 10);
+  };
+
+  if (fromInput) fromInput.value = formatLocal(firstDay);
+  if (toInput) toInput.value = formatLocal(today);
 }
 
 function getModuleLabel(module) {
@@ -119,6 +175,7 @@ function getModuleLabel(module) {
     case "pacientes": return "Pacientes";
     case "citas": return "Citas";
     case "diagnosticos": return "Diagnósticos";
+    case "tickets": return "Tickets";
     default: return "Detalle";
   }
 }
@@ -130,7 +187,7 @@ function countUnique(values) {
 function countDiagnoses(rows) {
   let total = 0;
   for (const row of rows || []) {
-    if (row.encounter_diagnoses?.length) {
+    if (Array.isArray(row.encounter_diagnoses)) {
       total += row.encounter_diagnoses.length;
     }
   }
@@ -139,7 +196,9 @@ function countDiagnoses(rows) {
 
 function formatDateTime(value) {
   if (!value) return "-";
-  return new Date(value).toLocaleString();
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return "-";
+  return d.toLocaleString();
 }
 
 function formatPatient(patient) {
@@ -161,7 +220,7 @@ function renderSummaryCards(items) {
 }
 
 function renderConsultations(rows) {
-  if (!rows.length) return `<p>No hay consultas para el período seleccionado.</p>`;
+  if (!rows?.length) return `<p>No hay consultas para el período seleccionado.</p>`;
 
   return `
     <table>
@@ -171,7 +230,7 @@ function renderConsultations(rows) {
           <th>Paciente</th>
           <th>Motivo</th>
           <th>Estado</th>
-          <th>Detalle</th>
+          <th>Diagnóstico</th>
         </tr>
       </thead>
       <tbody>
@@ -179,14 +238,16 @@ function renderConsultations(rows) {
           const primaryDiagnosis = (row.encounter_diagnoses || []).find(d => d.is_primary);
           return `
             <tr>
-              <td>${formatDateTime(row.encounter_at)}</td>
+              <td>${escapeHtml(formatDateTime(row.encounter_at))}</td>
               <td>${escapeHtml(formatPatient(row.patients))}</td>
               <td>${escapeHtml(row.chief_complaint || "-")}</td>
               <td>${escapeHtml(row.encounter_statuses?.name || "-")}</td>
               <td>
-                ${primaryDiagnosis?.diagnosis_catalog
-                  ? `${escapeHtml(primaryDiagnosis.diagnosis_catalog.code)} - ${escapeHtml(primaryDiagnosis.diagnosis_catalog.description)}`
-                  : "Sin diagnóstico"}
+                ${
+                  primaryDiagnosis?.diagnosis_catalog
+                    ? `${escapeHtml(primaryDiagnosis.diagnosis_catalog.code)} - ${escapeHtml(primaryDiagnosis.diagnosis_catalog.description)}`
+                    : "Sin diagnóstico"
+                }
               </td>
             </tr>
           `;
@@ -197,7 +258,7 @@ function renderConsultations(rows) {
 }
 
 function renderPatients(rows) {
-  if (!rows.length) return `<p>No hay pacientes para el período seleccionado.</p>`;
+  if (!rows?.length) return `<p>No hay pacientes para el período seleccionado.</p>`;
 
   return `
     <table>
@@ -219,7 +280,7 @@ function renderPatients(rows) {
             <td>${escapeHtml(row.birth_date || "-")}</td>
             <td>${escapeHtml(row.occupation || "-")}</td>
             <td>${row.active ? "Activo" : "Inactivo"}</td>
-            <td>${formatDateTime(row.created_at)}</td>
+            <td>${escapeHtml(formatDateTime(row.created_at))}</td>
           </tr>
         `).join("")}
       </tbody>
@@ -228,7 +289,7 @@ function renderPatients(rows) {
 }
 
 function renderAppointments(rows) {
-  if (!rows.length) return `<p>No hay citas para el período seleccionado.</p>`;
+  if (!rows?.length) return `<p>No hay citas para el período seleccionado.</p>`;
 
   return `
     <table>
@@ -243,7 +304,7 @@ function renderAppointments(rows) {
       <tbody>
         ${rows.map(row => `
           <tr>
-            <td>${formatDateTime(row.scheduled_at)}</td>
+            <td>${escapeHtml(formatDateTime(row.scheduled_at))}</td>
             <td>${escapeHtml(formatPatient(row.patients))}</td>
             <td>${escapeHtml(row.reason || "-")}</td>
             <td>${escapeHtml(row.appointment_statuses?.name || "-")}</td>
@@ -255,7 +316,7 @@ function renderAppointments(rows) {
 }
 
 function renderDiagnoses(rows) {
-  if (!rows.length) return `<p>No hay diagnósticos para el período seleccionado.</p>`;
+  if (!rows?.length) return `<p>No hay diagnósticos para el período seleccionado.</p>`;
 
   return `
     <table>
@@ -271,11 +332,40 @@ function renderDiagnoses(rows) {
       <tbody>
         ${rows.map(row => `
           <tr>
-            <td>${formatDateTime(row.created_at)}</td>
+            <td>${escapeHtml(formatDateTime(row.created_at))}</td>
             <td>${escapeHtml(formatPatient(row.encounters?.patients))}</td>
             <td>${escapeHtml(row.diagnosis_catalog?.code || "-")}</td>
             <td>${escapeHtml(row.diagnosis_catalog?.description || "-")}</td>
             <td>${row.is_primary ? "Sí" : "No"}</td>
+          </tr>
+        `).join("")}
+      </tbody>
+    </table>
+  `;
+}
+
+function renderTickets(rows) {
+  if (!rows?.length) return `<p>No hay tickets para el período seleccionado.</p>`;
+
+  return `
+    <table>
+      <thead>
+        <tr>
+          <th>Fecha</th>
+          <th>Paciente</th>
+          <th>Monto</th>
+          <th>Método</th>
+          <th>Estado</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${rows.map(row => `
+          <tr>
+            <td>${escapeHtml(formatDateTime(row.issued_at))}</td>
+            <td>${escapeHtml(formatPatient(row.patients))}</td>
+            <td>$${Number(row.amount ?? 0).toFixed(2)} ${escapeHtml(row.currency || "")}</td>
+            <td>${escapeHtml(row.payment_method || "-")}</td>
+            <td>${escapeHtml(row.payment_status || "-")}</td>
           </tr>
         `).join("")}
       </tbody>

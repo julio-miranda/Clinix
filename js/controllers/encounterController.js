@@ -80,11 +80,6 @@ async function loadEncounterForEdit(encounterId) {
   const isClosed = statusCode === "CLOSED" || !!detail?.closed_at;
 
   if (form) {
-    if (isClosed) {
-      lockClosedForm(form);
-      return;
-    }
-
     const antecedents = await getPatientAntecedents(patientId);
     const allergies = await getPatientAllergies(patientId);
 
@@ -129,7 +124,10 @@ async function loadEncounterForEdit(encounterId) {
         .join("\n")
     );
 
-    setValue("next_appointment", appointment?.scheduled_at ? toLocalDateTime(appointment.scheduled_at) : "");
+    setValue(
+      "next_appointment",
+      appointment?.scheduled_at ? toLocalDateTime(appointment.scheduled_at) : ""
+    );
     setValue("appointment_reason", appointment?.reason || "");
 
     const ticket = getFirstItem(detail.consultation_tickets);
@@ -143,6 +141,11 @@ async function loadEncounterForEdit(encounterId) {
       setChecked("charge_now", false);
       setValue("ticket_amount", "");
       setValue("payment_method", "");
+    }
+
+    if (isClosed) {
+      lockClosedForm(form);
+      return;
     }
 
     setSubmitButtonLabel("Actualizar consulta");
@@ -327,6 +330,7 @@ async function handleEncounterSubmit(event) {
       chiefComplaint: form.chief_complaint.value.trim(),
       presentIllness: form.present_illness.value.trim(),
       physicalExam: form.physical_exam.value.trim(),
+      notes: form.notes?.value?.trim() || null,
       medicalHistory: form.medical_history.value.trim(),
       surgicalHistory: form.surgical_history.value.trim(),
       allergies: form.allergies.value.trim(),

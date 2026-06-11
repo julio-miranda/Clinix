@@ -1,5 +1,17 @@
-//js/models/reportDetailModel.js
+// js/models/reportDetailModel.js
 import { supabase } from "../config/supabase.js";
+
+function toDayStartISO(dateString) {
+  if (!dateString) return null;
+  const d = new Date(`${dateString}T00:00:00`);
+  return Number.isNaN(d.getTime()) ? null : d.toISOString();
+}
+
+function toDayEndISO(dateString) {
+  if (!dateString) return null;
+  const d = new Date(`${dateString}T23:59:59.999`);
+  return Number.isNaN(d.getTime()) ? null : d.toISOString();
+}
 
 export async function getConsultationsDetail(from, to) {
   let query = supabase
@@ -10,6 +22,7 @@ export async function getConsultationsDetail(from, to) {
       chief_complaint,
       present_illness,
       physical_exam,
+      notes,
       created_at,
       patients (
         id,
@@ -34,12 +47,14 @@ export async function getConsultationsDetail(from, to) {
     `)
     .order("encounter_at", { ascending: false });
 
-  if (from) query = query.gte("encounter_at", from);
-  if (to) query = query.lte("encounter_at", to);
+  const fromISO = toDayStartISO(from);
+  const toISO = toDayEndISO(to);
+
+  if (fromISO) query = query.gte("encounter_at", fromISO);
+  if (toISO) query = query.lte("encounter_at", toISO);
 
   const { data, error } = await query;
   if (error) throw error;
-
   return data ?? [];
 }
 
@@ -60,12 +75,14 @@ export async function getPatientsDetail(from, to) {
     `)
     .order("created_at", { ascending: false });
 
-  if (from) query = query.gte("created_at", from);
-  if (to) query = query.lte("created_at", to);
+  const fromISO = toDayStartISO(from);
+  const toISO = toDayEndISO(to);
+
+  if (fromISO) query = query.gte("created_at", fromISO);
+  if (toISO) query = query.lte("created_at", toISO);
 
   const { data, error } = await query;
   if (error) throw error;
-
   return data ?? [];
 }
 
@@ -93,12 +110,14 @@ export async function getAppointmentsDetail(from, to) {
     `)
     .order("scheduled_at", { ascending: true });
 
-  if (from) query = query.gte("scheduled_at", from);
-  if (to) query = query.lte("scheduled_at", to);
+  const fromISO = toDayStartISO(from);
+  const toISO = toDayEndISO(to);
+
+  if (fromISO) query = query.gte("scheduled_at", fromISO);
+  if (toISO) query = query.lte("scheduled_at", toISO);
 
   const { data, error } = await query;
   if (error) throw error;
-
   return data ?? [];
 }
 
@@ -128,11 +147,54 @@ export async function getDiagnosesDetail(from, to) {
     `)
     .order("created_at", { ascending: false });
 
-  if (from) query = query.gte("created_at", from);
-  if (to) query = query.lte("created_at", to);
+  const fromISO = toDayStartISO(from);
+  const toISO = toDayEndISO(to);
+
+  if (fromISO) query = query.gte("created_at", fromISO);
+  if (toISO) query = query.lte("created_at", toISO);
 
   const { data, error } = await query;
   if (error) throw error;
+  return data ?? [];
+}
 
+export async function getTicketsDetail(from, to) {
+  let query = supabase
+    .from("consultation_tickets")
+    .select(`
+      id,
+      encounter_id,
+      patient_id,
+      issued_by,
+      amount,
+      currency,
+      payment_status,
+      payment_method,
+      reference,
+      notes,
+      issued_at,
+      paid_at,
+      patients (
+        id,
+        medical_record_number,
+        first_name,
+        last_name
+      ),
+      encounters (
+        id,
+        encounter_at,
+        chief_complaint
+      )
+    `)
+    .order("issued_at", { ascending: false });
+
+  const fromISO = toDayStartISO(from);
+  const toISO = toDayEndISO(to);
+
+  if (fromISO) query = query.gte("issued_at", fromISO);
+  if (toISO) query = query.lte("issued_at", toISO);
+
+  const { data, error } = await query;
+  if (error) throw error;
   return data ?? [];
 }
