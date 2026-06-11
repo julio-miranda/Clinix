@@ -6,17 +6,15 @@
       <h1>Consulta médica</h1>
       <p>
         Registro de antecedentes, signos vitales,
-        diagnóstico, plan y próxima cita.
+        diagnóstico, plan, próxima cita y cobro.
       </p>
     </div>
 
     <div class="toolbar">
-
       <a href="#/dashboard" class="btn-secondary"
         style="text-decoration:none; display:inline-flex; align-items:center; justify-content:center;">
         ← Volver
       </a>
-
     </div>
 
   </div>
@@ -28,34 +26,21 @@
     ============================ -->
 
     <div class="form-section">
-
       <h2>Datos generales</h2>
 
-      <label>Paciente</label>
-
+      <label for="patientSelect">Paciente</label>
       <select name="patient_id" id="patientSelect" required>
-
-        <option value="">
-          Seleccione un paciente
-        </option>
-
+        <option value="">Seleccione un paciente</option>
       </select>
 
-      <label>Motivo de consulta</label>
+      <label for="chief_complaint">Motivo de consulta</label>
+      <textarea name="chief_complaint" id="chief_complaint" required></textarea>
 
-      <textarea name="chief_complaint" required>
-      </textarea>
+      <label for="present_illness">Enfermedad actual</label>
+      <textarea name="present_illness" id="present_illness"></textarea>
 
-      <label>Enfermedad actual</label>
-
-      <textarea name="present_illness">
-      </textarea>
-
-      <label>Examen físico</label>
-
-      <textarea name="physical_exam">
-      </textarea>
-
+      <label for="physical_exam">Examen físico</label>
+      <textarea name="physical_exam" id="physical_exam"></textarea>
     </div>
 
     <!-- ===========================
@@ -63,24 +48,19 @@
     ============================ -->
 
     <div class="form-section">
-
       <h2>Antecedentes</h2>
 
-      <label>Antecedentes médicos</label>
+      <label for="medical_history">Antecedentes médicos</label>
+      <textarea name="medical_history" id="medical_history"
+        placeholder="Se llenará automáticamente al seleccionar el paciente."></textarea>
 
-      <textarea name="medical_history" placeholder="Se llenará automáticamente al seleccionar el paciente.">
-      </textarea>
+      <label for="surgical_history">Antecedentes quirúrgicos</label>
+      <textarea name="surgical_history" id="surgical_history"
+        placeholder="Se llenará automáticamente al seleccionar el paciente."></textarea>
 
-      <label>Antecedentes quirúrgicos</label>
-
-      <textarea name="surgical_history" placeholder="Se llenará automáticamente al seleccionar el paciente.">
-      </textarea>
-
-      <label>Alergias</label>
-
-      <textarea name="allergies" placeholder="Se llenará automáticamente al seleccionar el paciente.">
-      </textarea>
-
+      <label for="allergies">Alergias</label>
+      <textarea name="allergies" id="allergies"
+        placeholder="Se llenará automáticamente al seleccionar el paciente."></textarea>
     </div>
 
     <!-- ===========================
@@ -88,48 +68,44 @@
     ============================ -->
 
     <div class="form-section">
-
       <h2>Signos vitales</h2>
 
       <div class="grid-3">
-
         <div>
-          <label>Peso (kg)</label>
-          <input type="number" step="0.01" name="weight_kg" />
+          <label for="weight_kg">Peso (kg)</label>
+          <input type="number" step="0.01" name="weight_kg" id="weight_kg" />
         </div>
 
         <div>
-          <label>Altura (cm)</label>
-          <input type="number" step="0.01" name="height_cm" />
+          <label for="height_cm">Altura (cm)</label>
+          <input type="number" step="0.01" name="height_cm" id="height_cm" />
         </div>
 
         <div>
-          <label>Temperatura (°C)</label>
-          <input type="number" step="0.1" name="temperature_c" />
+          <label for="temperature_c">Temperatura (°C)</label>
+          <input type="number" step="0.1" name="temperature_c" id="temperature_c" />
         </div>
 
         <div>
-          <label>Presión sistólica</label>
-          <input type="number" name="systolic_bp" />
+          <label for="systolic_bp">Presión sistólica</label>
+          <input type="number" name="systolic_bp" id="systolic_bp" />
         </div>
 
         <div>
-          <label>Presión diastólica</label>
-          <input type="number" name="diastolic_bp" />
+          <label for="diastolic_bp">Presión diastólica</label>
+          <input type="number" name="diastolic_bp" id="diastolic_bp" />
         </div>
 
         <div>
-          <label>Pulso</label>
-          <input type="number" name="pulse_rate" />
+          <label for="pulse_rate">Pulso</label>
+          <input type="number" name="pulse_rate" id="pulse_rate" />
         </div>
 
         <div>
-          <label>Frecuencia respiratoria</label>
-          <input type="number" name="respiratory_rate" />
+          <label for="respiratory_rate">Frecuencia respiratoria</label>
+          <input type="number" name="respiratory_rate" id="respiratory_rate" />
         </div>
-
       </div>
-
     </div>
 
     <!-- ===========================
@@ -137,23 +113,27 @@
     ============================ -->
 
     <div class="form-section">
-
       <h2>Diagnóstico y plan</h2>
 
-      <label>Código diagnóstico</label>
+      <label for="diagnosis_code">Código diagnóstico</label>
+      <input type="text" name="diagnosis_code" id="diagnosis_code" placeholder="Ej: J00" />
 
-      <input type="text" name="diagnosis_code" placeholder="Ej: J00" />
+      <label for="primary_diagnosis">Diagnóstico principal</label>
+      <textarea name="primary_diagnosis" id="primary_diagnosis"></textarea>
 
-      <label>Diagnóstico principal</label>
+      <label for="plan_items">Plan terapéutico</label>
+      <textarea name="plan_items" id="plan_items" placeholder="Una indicación por línea"></textarea>
+    </div>
 
-      <textarea name="primary_diagnosis">
-      </textarea>
+    <!-- ===========================
+         NOTAS
+    ============================ -->
 
-      <label>Plan terapéutico</label>
+    <div class="form-section">
+      <h2>Notas</h2>
 
-      <textarea name="plan_items" placeholder="Una indicación por línea">
-      </textarea>
-
+      <label for="notes">Notas clínicas</label>
+      <textarea name="notes" id="notes" placeholder="Observaciones adicionales"></textarea>
     </div>
 
     <!-- ===========================
@@ -161,30 +141,64 @@
     ============================ -->
 
     <div class="form-section">
-
       <h2>Próxima cita</h2>
 
-      <label>Fecha y hora</label>
+      <label for="next_appointment">Fecha y hora</label>
+      <input type="datetime-local" name="next_appointment" id="next_appointment" />
 
-      <input type="datetime-local" name="next_appointment" />
-
-      <label>Motivo</label>
-
-      <input type="text" name="appointment_reason" />
-
+      <label for="appointment_reason">Motivo</label>
+      <input type="text" name="appointment_reason" id="appointment_reason" />
     </div>
+
+    <!-- ===========================
+         TICKET / COBRO
+    ============================ -->
+
+    <div class="form-section">
+      <h2>Ticket y cobro</h2>
+
+      <label>
+        <input type="checkbox" name="issue_ticket" id="issue_ticket" />
+        Emitir ticket de consulta
+      </label>
+
+      <label>
+        <input type="checkbox" name="charge_now" id="charge_now" />
+        Marcar como cobrado
+      </label>
+
+      <label for="ticket_amount">Monto</label>
+      <input type="number" name="ticket_amount" id="ticket_amount" step="0.01" min="0"
+        placeholder="Monto de la consulta" />
+
+      <label for="payment_method">Método de pago</label>
+      <select name="payment_method" id="payment_method">
+        <option value="">Seleccione un método</option>
+        <option value="efectivo">Efectivo</option>
+        <option value="tarjeta">Tarjeta</option>
+        <option value="transferencia">Transferencia</option>
+        <option value="cheque">Cheque</option>
+        <option value="otro">Otro</option>
+      </select>
+    </div>
+
+    <!-- ===========================
+         ADJUNTOS / DOCUMENTOS
+    ============================ -->
 
     <div class="form-section">
       <h2>Adjuntos / Documentos</h2>
 
-      <label>Título del documento</label>
-      <input type="text" name="attachment_title" placeholder="Ej: Laboratorio, Ultrasonido, Radiografía" />
+      <label for="attachment_title">Título del documento</label>
+      <input type="text" name="attachment_title" id="attachment_title"
+        placeholder="Ej: Laboratorio, Ultrasonido, Radiografía" />
 
-      <label>Descripción</label>
-      <textarea name="attachment_description" placeholder="Observaciones del documento"></textarea>
+      <label for="attachment_description">Descripción</label>
+      <textarea name="attachment_description" id="attachment_description"
+        placeholder="Observaciones del documento"></textarea>
 
-      <label>Archivos</label>
-      <input type="file" name="file" accept=".pdf,image/jpeg,image/png,image/webp" required />
+      <label for="file">Archivos</label>
+      <input type="file" name="file" id="file" accept=".pdf,image/jpeg,image/png,image/webp" />
 
       <small>
         Puede subir uno o varios archivos PDF o imágenes.
@@ -196,7 +210,6 @@
     ============================ -->
 
     <div class="form-actions">
-
       <a href="#/dashboard" class="btn-secondary"
         style="text-decoration:none; display:inline-flex; align-items:center; justify-content:center;">
         Cancelar
@@ -205,7 +218,6 @@
       <button type="submit">
         Guardar consulta
       </button>
-
     </div>
 
   </form>

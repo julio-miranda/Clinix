@@ -1,3 +1,4 @@
+// js/controllers/reportController.js
 import {
   getDashboardSummary,
   getConsultationsByRange,
@@ -15,6 +16,49 @@ function escapeHtml(str) {
     .replaceAll("'", "&#39;");
 }
 
+function formatDateTime(value) {
+  if (!value) return "-";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "-";
+
+  return new Intl.DateTimeFormat("es-SV", {
+    dateStyle: "short",
+    timeStyle: "short"
+  }).format(date);
+}
+
+function formatPatient(data) {
+  if (!data) return "-";
+
+  const patient = data.patient ?? data;
+
+  const mrn = patient.medical_record_number ?? "";
+  const firstName = patient.first_name ?? "";
+  const lastName = patient.last_name ?? "";
+
+  const full = `${firstName} ${lastName}`.trim();
+
+  if (mrn && full) return `${mrn} - ${full}`;
+  if (full) return full;
+  if (mrn) return mrn;
+
+  return "-";
+}
+
+function setDefaultDates(fromInput, toInput) {
+  const today = new Date();
+  const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
+
+  const formatLocalDate = (date) => {
+    const offset = date.getTimezoneOffset();
+    const local = new Date(date.getTime() - offset * 60 * 1000);
+    return local.toISOString().slice(0, 10);
+  };
+
+  if (fromInput) fromInput.value = formatLocalDate(firstDay);
+  if (toInput) toInput.value = formatLocalDate(today);
+}
+
 export async function initReportsView() {
   const fromInput = document.getElementById("reportFrom");
   const toInput = document.getElementById("reportTo");
@@ -29,14 +73,6 @@ export async function initReportsView() {
   }
 
   await loadAllReports();
-}
-
-function setDefaultDates(fromInput, toInput) {
-  const today = new Date();
-  const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
-
-  if (fromInput) fromInput.value = firstDay.toISOString().slice(0, 10);
-  if (toInput) toInput.value = today.toISOString().slice(0, 10);
 }
 
 async function loadAllReports() {
@@ -83,7 +119,7 @@ async function loadAllReports() {
 }
 
 function renderConsultationsTable(rows) {
-  if (!rows.length) return "<p>No hay consultas en el período seleccionado.</p>";
+  if (!rows?.length) return "<p>No hay consultas en el período seleccionado.</p>";
 
   return `
     <table>
@@ -97,13 +133,13 @@ function renderConsultationsTable(rows) {
         </tr>
       </thead>
       <tbody>
-        ${rows.map(row => `
+        ${rows.map((row) => `
           <tr>
-            <td>${formatDateTime(row.encounter_at)}</td>
-            <td>${escapeHtml(formatPatient(row.patients))}</td>
-            <td>${escapeHtml(row.chief_complaint || "")}</td>
-            <td>${escapeHtml(row.encounter_statuses?.name || "-")}</td>
-            <td><a href="#/consulta-detalle?id=${escapeHtml(row.id)}">Detalle</a></td>
+            <td>${escapeHtml(formatDateTime(row.encounter_at))}</td>
+            <td>${escapeHtml(formatPatient(row))}</td>
+            <td>${escapeHtml(row.chief_complaint || "-")}</td>
+            <td>${escapeHtml(row.status?.name || "-")}</td>
+            <td><a href="#/consulta-detalle?id=${encodeURIComponent(row.id)}">Detalle</a></td>
           </tr>
         `).join("")}
       </tbody>
@@ -112,7 +148,7 @@ function renderConsultationsTable(rows) {
 }
 
 function renderDiagnosesTable(rows) {
-  if (!rows.length) return "<p>No hay diagnósticos registrados.</p>";
+  if (!rows?.length) return "<p>No hay diagnósticos registrados.</p>";
 
   return `
     <table>
@@ -124,11 +160,11 @@ function renderDiagnosesTable(rows) {
         </tr>
       </thead>
       <tbody>
-        ${rows.map(row => `
+        ${rows.map((row) => `
           <tr>
             <td>${escapeHtml(row.code || "-")}</td>
             <td>${escapeHtml(row.description || "-")}</td>
-            <td>${row.total ?? 0}</td>
+            <td>${Number(row.total ?? 0)}</td>
           </tr>
         `).join("")}
       </tbody>
@@ -137,7 +173,7 @@ function renderDiagnosesTable(rows) {
 }
 
 function renderAppointmentsTable(rows) {
-  if (!rows.length) return "<p>No hay citas pendientes en el período seleccionado.</p>";
+  if (!rows?.length) return "<p>No hay citas pendientes en el período seleccionado.</p>";
 
   return `
     <table>
@@ -150,9 +186,9 @@ function renderAppointmentsTable(rows) {
         </tr>
       </thead>
       <tbody>
-        ${rows.map(row => `
+        ${rows.map((row) => `
           <tr>
-            <td>${formatDateTime(row.scheduled_at)}</td>
+            <td>${escapeHtml(formatDateTime(row.scheduled_at))}</td>
             <td>${escapeHtml(formatPatient(row))}</td>
             <td>${escapeHtml(row.reason || "-")}</td>
             <td>${escapeHtml(row.status_name || "-")}</td>
@@ -161,14 +197,4 @@ function renderAppointmentsTable(rows) {
       </tbody>
     </table>
   `;
-}
-
-function formatDateTime(value) {
-  if (!value) return "-";
-  return new Date(value).toLocaleString();
-}
-
-function formatPatient(patient) {
-  if (!patient) return "-";
-  return `${patient.medical_record_number || ""} - ${patient.first_name || ""} ${patient.last_name || ""}`.trim();
 }

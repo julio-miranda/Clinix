@@ -2,6 +2,7 @@
 import { supabase } from "../config/supabase.js";
 import { createEncounter, createVitalSigns } from "./encounterModel.js";
 import { createAuditLog } from "./auditModel.js";
+import { issueConsultationTicket } from "./consultationTicketModel.js";
 
 async function getCatalogId(tableName, code) {
   const { data, error } = await supabase
@@ -47,10 +48,6 @@ function getNewLines(currentLines, existingLines) {
   const uniqueCurrent = uniqueLines(currentLines);
   return uniqueCurrent.filter(line => !existingSet.has(normalizeLine(line)));
 }
-
-/* =========================================
-   OBTENER ANTECEDENTES EXISTENTES
-========================================= */
 
 export async function getPatientAntecedents(patientId) {
   const { data, error } = await supabase
@@ -104,10 +101,6 @@ export async function getPatientAllergies(patientId) {
     text: lines.join("\n")
   };
 }
-
-/* =========================================
-   CREAR ITEMS DE PACIENTE
-========================================= */
 
 async function createHistoryItem(patientId, typeCode, description, recordedBy) {
   const typeId = await getCatalogId("patient_history_types", typeCode);
@@ -170,276 +163,6 @@ async function createAllergyItem(patientId, allergen, notedBy) {
   return data;
 }
 
-/* =========================================
-   ANTECEDENTES DE LA CONSULTA
-========================================= */
-
-async function createEncounterAntecedent(encounterId, antecedentText) {
-  const cleanText = String(antecedentText || "").trim();
-  if (!cleanText) return null;
-
-  const { data: existing } = await supabase
-    .from("encounter_antecedents")
-    .select("id")
-    .eq("encounter_id", encounterId)
-    .eq("antecedent_text", cleanText)
-    .maybeSingle();
-
-  if (existing) return existing;
-
-  const { data, error } = await supabase
-    .from("encounter_antecedents")
-    .insert({
-      encounter_id: encounterId,
-      antecedent_text: cleanText
-    })
-    .select()
-    .single();
-
-  if (error) throw error;
-  return data;
-}
-
-async function createEncounterAntecedents(encounterId, medicalHistory, surgicalHistory) {
-  const medicalLines = uniqueLines(splitLines(medicalHistory));
-  const surgicalLines = uniqueLines(splitLines(surgicalHistory));
-
-  for (const item of medicalLines) {
-    await createEncounterAntecedent(encounterId, `Antecedente médico: ${item}`);
-  }
-
-  for (const item of surgicalLines) {
-    await createEncounterAntecedent(encounterId, `Antecedente quirúrgico: ${item}`);
-  }
-}
-
-/* =========================================
-   ACTUALIZAR CONSULTA COMPLETA
-========================================= */
-
-export async function updateConsultationBundle({
-  encounterId,
-  userId,
-  patientId,
-  chiefComplaint,
-  presentIllness,
-  physicalExam,
-  medicalHistory,
-  surgicalHistory,
-  allergies,
-  existingMedicalHistory = [],
-  existingSurgicalHistory = [],
-  existingAllergies = [],
-  vitalSigns,
-  diagnosisCode,
-  primaryDiagnosis,
-  diagnosisNotes,
-  planItems,
-  nextAppointment,
-  appointmentReason
-}) {
-  if (!encounterId) {
-    throw new Error("encounterId es obligatorio para actualizar.");
-  }
-
-  /* =========================
-     ACTUALIZAR ENCOUNTER
-  ========================= */
-
-  const { error: encounterError } = await supabase
-    .from("encounters")
-    .update({
-      chief_complaint: chiefComplaint || null,
-      present_illness: presentIllness || null,
-      physical_exam: physicalExam || null,
-      updated_at: new Date().toISOString()
-    })
-    .eq("id", encounterId);
-
-  if (encounterError) throw encounterError;
-
-  /* =========================
-     ACTUALIZAR SIGNOS VITALES
-  ========================= */
-
-  const { data: existingVital } = await supabase
-    .from("vital_signs")
-    .select("id")
-    .eq("encounter_id", encounterId)
-    .maybeSingle();
-
-  if (existingVital?.id) {
-    const { error } = await supabase
-      .from("vital_signs")
-      .update({
-        ...vitalSigns,
-        recorded_by: userId
-      })
-      .eq("id", existingVital.id);
-
-    if (error) throw error;
-  } else {
-    await createVitalSigns(encounterId, vitalSigns, userId);
-  }
-
-  /* =========================
-     NUEVOS ANTECEDENTES
-  ========================= */
-
-  const medicalToCreate = getNewLines(
-    splitLines(medicalHistory),
-    existingMedicalHistory
-  );
-
-  const surgicalToCreate = getNewLines(
-    splitLines(surgicalHistory),
-    existingSurgicalHistory
-  );
-
-  const allergiesToCreate = getNewLines(
-    splitLines(allergies),
-    existingAllergies
-  );
-
-  for (const item of medicalToCreate) {
-    await createHistoryItem(patientId, "MEDICAL", item, userId);
-  }
-
-  for (const item of surgicalToCreate) {
-    await createHistoryItem(patientId, "SURGICAL", item, userId);
-  }
-
-  for (const item of allergiesToCreate) {
-    await createAllergyItem(patientId, item, userId);
-  }
-
-  /* =========================
-     DIAGNÓSTICO
-  ========================= */
-
-  if (String(primaryDiagnosis || "").trim()) {
-
-    const diagnosisId =
-      await ensureDiagnosisCatalogEntry({
-        code: diagnosisCode,
-        description: primaryDiagnosis
-      });
-
-    const { data: existingDiag } = await supabase
-      .from("encounter_diagnoses")
-      .select("id")
-      .eq("encounter_id", encounterId)
-      .eq("is_primary", true)
-      .maybeSingle();
-
-    if (existingDiag?.id) {
-
-      const { error } = await supabase
-        .from("encounter_diagnoses")
-        .update({
-          diagnosis_id: diagnosisId,
-          notes: diagnosisNotes || null,
-          created_by: userId
-        })
-        .eq("id", existingDiag.id);
-
-      if (error) throw error;
-
-    } else {
-
-      await createDiagnosisItem(
-        encounterId,
-        {
-          code: diagnosisCode,
-          description: primaryDiagnosis,
-          notes: diagnosisNotes || null
-        },
-        userId
-      );
-    }
-  }
-
-  /* =========================
-     PLAN
-  ========================= */
-
-  await supabase
-    .from("encounter_plan_items")
-    .delete()
-    .eq("encounter_id", encounterId);
-
-  const planList =
-    uniqueLines(splitLines(planItems));
-
-  for (let i = 0; i < planList.length; i++) {
-    await createPlanItem(
-      encounterId,
-      planList[i],
-      userId,
-      i + 1
-    );
-  }
-
-  /* =========================
-     CITA
-  ========================= */
-
-  if (nextAppointment) {
-
-    const { data: existingAppt } = await supabase
-      .from("appointments")
-      .select("id")
-      .eq("encounter_id", encounterId)
-      .maybeSingle();
-
-    if (existingAppt?.id) {
-
-      const { error } = await supabase
-        .from("appointments")
-        .update({
-          scheduled_at: nextAppointment,
-          reason: appointmentReason || null
-        })
-        .eq("id", existingAppt.id);
-
-      if (error) throw error;
-
-    } else {
-
-      await createAppointmentItem(
-        patientId,
-        encounterId,
-        nextAppointment,
-        appointmentReason,
-        userId
-      );
-    }
-  }
-
-  /* =========================
-     AUDITORÍA
-  ========================= */
-
-  await createAuditLog({
-    actionCode: "UPDATE",
-    entityName: "encounters",
-    entityId: encounterId,
-    details: {
-      patientId,
-      updated: true
-    },
-    userId
-  });
-
-  return {
-    encounter: { id: encounterId }
-  };
-}
-
-/* =========================================
-   DIAGNÓSTICO
-========================================= */
-
 async function ensureDiagnosisCatalogEntry({ code, description }) {
   const systemId = await getCatalogId("diagnosis_systems_ref", "ICD10");
   if (!systemId) {
@@ -497,10 +220,6 @@ async function createDiagnosisItem(encounterId, { code, description, notes }, cr
   return data;
 }
 
-/* =========================================
-   PLAN
-========================================= */
-
 async function createPlanItem(encounterId, description, createdBy, sortOrder = 1) {
   const typeId = await getCatalogId("plan_item_types", "ADVICE");
   if (!typeId) {
@@ -526,10 +245,6 @@ async function createPlanItem(encounterId, description, createdBy, sortOrder = 1
   return data;
 }
 
-/* =========================================
-   CITA
-========================================= */
-
 async function createAppointmentItem(patientId, encounterId, scheduledAt, reason, createdByUserId) {
   const statusId = await getCatalogId("appointment_statuses", "SCHEDULED");
   if (!statusId) {
@@ -553,10 +268,6 @@ async function createAppointmentItem(patientId, encounterId, scheduledAt, reason
   return data;
 }
 
-/* =========================================
-   GUARDAR CONSULTA COMPLETA
-========================================= */
-
 export async function saveConsultationBundle({
   userId,
   patientId,
@@ -575,7 +286,11 @@ export async function saveConsultationBundle({
   diagnosisNotes,
   planItems,
   nextAppointment,
-  appointmentReason
+  appointmentReason,
+  issueTicket = false,
+  chargeNow = false,
+  ticketAmount = null,
+  paymentMethod = null
 }) {
   const encounter = await createEncounter({
     patient_id: patientId,
@@ -589,20 +304,9 @@ export async function saveConsultationBundle({
 
   const vital = await createVitalSigns(encounter.id, vitalSigns, userId);
 
-  const medicalToCreate = getNewLines(
-    splitLines(medicalHistory),
-    existingMedicalHistory
-  );
-
-  const surgicalToCreate = getNewLines(
-    splitLines(surgicalHistory),
-    existingSurgicalHistory
-  );
-
-  const allergiesToCreate = getNewLines(
-    splitLines(allergies),
-    existingAllergies
-  );
+  const medicalToCreate = getNewLines(splitLines(medicalHistory), existingMedicalHistory);
+  const surgicalToCreate = getNewLines(splitLines(surgicalHistory), existingSurgicalHistory);
+  const allergiesToCreate = getNewLines(splitLines(allergies), existingAllergies);
 
   for (const item of medicalToCreate) {
     await createHistoryItem(patientId, "MEDICAL", item, userId);
@@ -615,8 +319,6 @@ export async function saveConsultationBundle({
   for (const item of allergiesToCreate) {
     await createAllergyItem(patientId, item, userId);
   }
-
-  await createEncounterAntecedents(encounter.id, medicalHistory, surgicalHistory);
 
   if (String(primaryDiagnosis || "").trim()) {
     await createDiagnosisItem(
@@ -645,6 +347,18 @@ export async function saveConsultationBundle({
     );
   }
 
+  let ticket = null;
+  if (issueTicket) {
+    ticket = await issueConsultationTicket({
+      encounterId: encounter.id,
+      patientId,
+      issuedBy: userId,
+      amount: ticketAmount,
+      paymentMethod,
+      payNow: chargeNow
+    });
+  }
+
   await createAuditLog({
     actionCode: "CREATE",
     entityName: "encounters",
@@ -653,13 +367,207 @@ export async function saveConsultationBundle({
       patientId,
       chiefComplaint: chiefComplaint || null,
       hasVitalSigns: !!vital,
-      hasAppointment: !!nextAppointment
+      hasAppointment: !!nextAppointment,
+      hasTicket: !!ticket
     },
     userId
   });
 
   return {
     encounter,
-    vital
+    vital,
+    ticket
+  };
+}
+
+export async function updateConsultationBundle({
+  encounterId,
+  userId,
+  patientId,
+  chiefComplaint,
+  presentIllness,
+  physicalExam,
+  medicalHistory,
+  surgicalHistory,
+  allergies,
+  existingMedicalHistory = [],
+  existingSurgicalHistory = [],
+  existingAllergies = [],
+  vitalSigns,
+  diagnosisCode,
+  primaryDiagnosis,
+  diagnosisNotes,
+  planItems,
+  nextAppointment,
+  appointmentReason,
+  issueTicket = false,
+  chargeNow = false,
+  ticketAmount = null,
+  paymentMethod = null
+}) {
+  if (!encounterId) {
+    throw new Error("encounterId es obligatorio para actualizar.");
+  }
+
+  const { error: encounterError } = await supabase
+    .from("encounters")
+    .update({
+      chief_complaint: chiefComplaint || null,
+      present_illness: presentIllness || null,
+      physical_exam: physicalExam || null,
+      updated_at: new Date().toISOString()
+    })
+    .eq("id", encounterId);
+
+  if (encounterError) throw encounterError;
+
+  const { data: existingVital } = await supabase
+    .from("vital_signs")
+    .select("id")
+    .eq("encounter_id", encounterId)
+    .maybeSingle();
+
+  if (existingVital?.id) {
+    const { error } = await supabase
+      .from("vital_signs")
+      .update({
+        ...vitalSigns,
+        recorded_by: userId
+      })
+      .eq("id", existingVital.id);
+
+    if (error) throw error;
+  } else {
+    await createVitalSigns(encounterId, vitalSigns, userId);
+  }
+
+  const medicalToCreate = getNewLines(splitLines(medicalHistory), existingMedicalHistory);
+  const surgicalToCreate = getNewLines(splitLines(surgicalHistory), existingSurgicalHistory);
+  const allergiesToCreate = getNewLines(splitLines(allergies), existingAllergies);
+
+  for (const item of medicalToCreate) {
+    await createHistoryItem(patientId, "MEDICAL", item, userId);
+  }
+
+  for (const item of surgicalToCreate) {
+    await createHistoryItem(patientId, "SURGICAL", item, userId);
+  }
+
+  for (const item of allergiesToCreate) {
+    await createAllergyItem(patientId, item, userId);
+  }
+
+  if (String(primaryDiagnosis || "").trim()) {
+    const diagnosisId = await ensureDiagnosisCatalogEntry({
+      code: diagnosisCode,
+      description: primaryDiagnosis
+    });
+
+    const { data: existingDiag } = await supabase
+      .from("encounter_diagnoses")
+      .select("id")
+      .eq("encounter_id", encounterId)
+      .eq("is_primary", true)
+      .maybeSingle();
+
+    if (existingDiag?.id) {
+      const { error } = await supabase
+        .from("encounter_diagnoses")
+        .update({
+          diagnosis_id: diagnosisId,
+          notes: diagnosisNotes || null,
+          created_by: userId
+        })
+        .eq("id", existingDiag.id);
+
+      if (error) throw error;
+    } else {
+      await createDiagnosisItem(
+        encounterId,
+        {
+          code: diagnosisCode,
+          description: primaryDiagnosis,
+          notes: diagnosisNotes || null
+        },
+        userId
+      );
+    }
+  }
+
+  await supabase
+    .from("encounter_plan_items")
+    .delete()
+    .eq("encounter_id", encounterId);
+
+  const planList = uniqueLines(splitLines(planItems));
+  for (let i = 0; i < planList.length; i++) {
+    await createPlanItem(encounterId, planList[i], userId, i + 1);
+  }
+
+  if (nextAppointment) {
+    const { data: existingAppt } = await supabase
+      .from("appointments")
+      .select("id")
+      .eq("encounter_id", encounterId)
+      .maybeSingle();
+
+    if (existingAppt?.id) {
+      const { error } = await supabase
+        .from("appointments")
+        .update({
+          scheduled_at: nextAppointment,
+          reason: appointmentReason || null
+        })
+        .eq("id", existingAppt.id);
+
+      if (error) throw error;
+    } else {
+      await createAppointmentItem(
+        patientId,
+        encounterId,
+        nextAppointment,
+        appointmentReason,
+        userId
+      );
+    }
+  }
+
+  let ticket = null;
+  if (issueTicket) {
+    const { data: existingTicket } = await supabase
+      .from("consultation_tickets")
+      .select("*")
+      .eq("encounter_id", encounterId)
+      .maybeSingle();
+
+    if (existingTicket) {
+      ticket = existingTicket;
+    } else {
+      ticket = await issueConsultationTicket({
+        encounterId,
+        patientId,
+        issuedBy: userId,
+        amount: ticketAmount,
+        paymentMethod,
+        payNow: chargeNow
+      });
+    }
+  }
+
+  await createAuditLog({
+    actionCode: "UPDATE",
+    entityName: "encounters",
+    entityId: encounterId,
+    details: {
+      patientId,
+      updated: true,
+      hasTicket: !!ticket
+    },
+    userId
+  });
+
+  return {
+    encounter: { id: encounterId },
+    ticket
   };
 }

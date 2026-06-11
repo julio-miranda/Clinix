@@ -45,6 +45,10 @@ export async function initEncounterView(params = new URLSearchParams()) {
       editingEncounterId = null;
       await loadPatientSelect(patientId);
       setSubmitButtonLabel("Guardar consulta");
+      setValue("ticket_amount", "");
+      setValue("payment_method", "");
+      setChecked("issue_ticket", false);
+      setChecked("charge_now", false);
     }
   } catch (error) {
     console.error("Error inicializando consulta:", error);
@@ -101,7 +105,7 @@ async function loadEncounterForEdit(encounterId) {
     setValue("physical_exam", detail.physical_exam || "");
     setValue("notes", detail.notes || "");
 
-    const vital = (detail.vital_signs && detail.vital_signs[0]) || null;
+    const vital = getFirstItem(detail.vital_signs);
     setValue("weight_kg", vital?.weight_kg ?? "");
     setValue("height_cm", vital?.height_cm ?? "");
     setValue("temperature_c", vital?.temperature_c ?? "");
@@ -110,22 +114,36 @@ async function loadEncounterForEdit(encounterId) {
     setValue("pulse_rate", vital?.pulse_rate ?? "");
     setValue("respiratory_rate", vital?.respiratory_rate ?? "");
 
-    const diagnosis = (detail.encounter_diagnoses || []).find(d => d.is_primary);
-    const planItems = detail.encounter_plan_items || [];
-    const appointment = (detail.appointments && detail.appointments[0]) || null;
+    const diagnosis = getFirstItem(detail.encounter_diagnoses, item => item?.is_primary);
+    const planItems = Array.isArray(detail.encounter_plan_items) ? detail.encounter_plan_items : [];
+    const appointment = getFirstItem(detail.appointments);
 
     setValue("diagnosis_code", diagnosis?.diagnosis_catalog?.code || "");
     setValue("primary_diagnosis", diagnosis?.diagnosis_catalog?.description || "");
     setValue(
       "plan_items",
       planItems
-        .sort((a, b) => a.sort_order - b.sort_order)
+        .slice()
+        .sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0))
         .map(item => item.description)
         .join("\n")
     );
 
     setValue("next_appointment", appointment?.scheduled_at ? toLocalDateTime(appointment.scheduled_at) : "");
     setValue("appointment_reason", appointment?.reason || "");
+
+    const ticket = getFirstItem(detail.consultation_tickets);
+    if (ticket) {
+      setChecked("issue_ticket", true);
+      setChecked("charge_now", String(ticket.payment_status || "").toUpperCase() === "PAID");
+      setValue("ticket_amount", ticket.amount ?? "");
+      setValue("payment_method", ticket.payment_method || "");
+    } else {
+      setChecked("issue_ticket", false);
+      setChecked("charge_now", false);
+      setValue("ticket_amount", "");
+      setValue("payment_method", "");
+    }
 
     setSubmitButtonLabel("Actualizar consulta");
   }
@@ -157,7 +175,12 @@ function lockClosedForm(form) {
 
 function setValue(name, value) {
   const el = document.querySelector(`[name='${name}']`);
-  if (el) el.value = value;
+  if (el) el.value = value ?? "";
+}
+
+function setChecked(name, checked) {
+  const el = document.querySelector(`[name='${name}']`);
+  if (el) el.checked = !!checked;
 }
 
 function setSubmitButtonLabel(label) {
@@ -170,6 +193,24 @@ function toLocalDateTime(value) {
   if (Number.isNaN(d.getTime())) return "";
   const offset = d.getTimezoneOffset() * 60000;
   return new Date(d.getTime() - offset).toISOString().slice(0, 16);
+}
+
+function getFirstItem(value, predicate = null) {
+  if (Array.isArray(value)) {
+    if (typeof predicate === "function") {
+      return value.find(predicate) || null;
+    }
+    return value[0] || null;
+  }
+
+  if (value && typeof value === "object") {
+    if (typeof predicate === "function") {
+      return predicate(value) ? value : null;
+    }
+    return value;
+  }
+
+  return null;
 }
 
 async function loadPatientSelect(selectedId = "") {
@@ -298,7 +339,11 @@ async function handleEncounterSubmit(event) {
       diagnosisNotes: null,
       planItems: form.plan_items.value.trim(),
       nextAppointment,
-      appointmentReason: form.appointment_reason.value.trim()
+      appointmentReason: form.appointment_reason.value.trim(),
+      issueTicket: !!form.issue_ticket?.checked,
+      chargeNow: !!form.charge_now?.checked,
+      ticketAmount: form.ticket_amount?.value ? Number(form.ticket_amount.value) : null,
+      paymentMethod: form.payment_method?.value?.trim() || null
     };
 
     const result = editingEncounterId

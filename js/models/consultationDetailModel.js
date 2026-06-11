@@ -10,7 +10,7 @@ export async function getConsultationAttachments(encounterId) {
     let signedUrl = null;
     try {
       signedUrl = await getSignedAttachmentUrl(item.file_url, 3600);
-    } catch (e) {
+    } catch {
       signedUrl = null;
     }
 
@@ -18,7 +18,7 @@ export async function getConsultationAttachments(encounterId) {
       ...item,
       signed_url: signedUrl
     });
-  } encounterId
+  }
 
   return resolved;
 }
@@ -33,9 +33,10 @@ export async function getConsultationDetail(encounterId) {
       attended_by_user_id,
       encounter_status_id,
       encounter_statuses (
-      id,
-      code,
-      name),
+        id,
+        code,
+        name
+      ),
       encounter_at,
       chief_complaint,
       present_illness,
@@ -63,6 +64,11 @@ export async function getConsultationDetail(encounterId) {
         pulse_rate,
         respiratory_rate,
         recorded_at
+      ),
+      encounter_antecedents (
+        id,
+        antecedent_text,
+        created_at
       ),
       encounter_diagnoses (
         id,
@@ -96,6 +102,17 @@ export async function getConsultationDetail(encounterId) {
           code,
           name
         )
+      ),
+      consultation_tickets (
+        id,
+        amount,
+        currency,
+        payment_status,
+        payment_method,
+        reference,
+        notes,
+        issued_at,
+        paid_at
       )
     `)
     .eq("id", encounterId)

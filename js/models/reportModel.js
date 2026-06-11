@@ -1,4 +1,4 @@
-//js/models/reportModel.js
+// js/models/reportModel.js
 import { supabase } from "../config/supabase.js";
 
 export async function getDashboardSummary() {
@@ -8,7 +8,12 @@ export async function getDashboardSummary() {
     .single();
 
   if (error) throw error;
-  return data;
+  return data ?? {
+    total_patients: 0,
+    total_encounters: 0,
+    total_appointments: 0,
+    pending_appointments: 0
+  };
 }
 
 export async function getConsultationsByRange(from, to) {
@@ -20,15 +25,16 @@ export async function getConsultationsByRange(from, to) {
       chief_complaint,
       present_illness,
       physical_exam,
+      notes,
       closed_at,
       created_at,
-      patients (
+      patient:patients (
         id,
         medical_record_number,
         first_name,
         last_name
       ),
-      encounter_statuses (
+      status:encounter_statuses (
         id,
         code,
         name
@@ -48,6 +54,7 @@ export async function getTopDiagnoses(limit = 10) {
   const { data, error } = await supabase
     .from("vw_top_diagnoses")
     .select("*")
+    .order("total", { ascending: false })
     .limit(limit);
 
   if (error) throw error;
