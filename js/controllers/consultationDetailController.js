@@ -10,6 +10,8 @@ import { uploadEncounterAttachment } from "../models/attachmentModel.js";
 import { getSessionUser } from "./authController.js";
 import { createAuditLog } from "../models/auditModel.js";
 import { closeEncounter } from "../models/encounterModel.js";
+// 3. Importar el generador del ticket
+import { buildTicketPrintHtml } from "../models/consultationTicketModel.js";
 
 export async function initConsultationDetailView(params = new URLSearchParams()) {
   const container = document.getElementById("consultationDetailContainer");
@@ -69,6 +71,62 @@ export async function initConsultationDetailView(params = new URLSearchParams())
     const allergyLines = Array.isArray(allergies) ? allergies : [];
     const attachmentLines = Array.isArray(attachments) ? attachments : [];
 
+    // 1. Integración del Ticket de Consulta
+    const ticket = detail.consultation_tickets;
+    const ticketHtml = ticket
+      ? `
+        <section class="detail-box detail-section">
+            <h2>Ticket de Consulta</h2>
+            <div class="detail-grid">
+                <div>
+                    <strong>ID Ticket</strong><br>
+                    ${escapeHtml(ticket.id)}
+                </div>
+                <div>
+                    <strong>Monto</strong><br>
+                    ${escapeHtml(ticket.currency)} ${Number(ticket.amount).toFixed(2)}
+                </div>
+                <div>
+                    <strong>Estado</strong><br>
+                    <span class="status ${escapeHtml(ticket.payment_status).toLowerCase()}">
+                        ${escapeHtml(ticket.payment_status)}
+                    </span>
+                </div>
+                <div>
+                    <strong>Método de pago</strong><br>
+                    ${escapeHtml(ticket.payment_method) || "Pendiente"}
+                </div>
+                <div>
+                    <strong>Referencia</strong><br>
+                    ${escapeHtml(ticket.reference) || "-"}
+                </div>
+                <div>
+                    <strong>Emitido</strong><br>
+                    ${ticket.issued_at ? new Date(ticket.issued_at).toLocaleString() : "-"}
+                </div>
+                <div>
+                    <strong>Pagado</strong><br>
+                    ${ticket.paid_at ? new Date(ticket.paid_at).toLocaleString() : "No pagado"}
+                </div>
+            </div>
+            ${ticket.notes
+              ? `
+                <div class="detail-notes" style="margin-top: 15px;">
+                    <strong>Notas</strong>
+                    <p>${escapeHtml(ticket.notes)}</p>
+                </div>
+                `
+              : ""
+            }
+        </section>
+      `
+      : `
+        <section class="detail-box detail-section">
+            <h2>Ticket de Consulta</h2>
+            <p>No existe un ticket generado para esta consulta.</p>
+        </section>
+      `;
+
     return `
       <div class="detail-grid">
 
@@ -86,11 +144,10 @@ export async function initConsultationDetailView(params = new URLSearchParams())
           <p><strong>Fecha de consulta:</strong> ${formatDateTime(detail.encounter_at)}</p>
           ${isClosed ? "<p><strong>Consulta cerrada.</strong></p>" : "<p><strong>Consulta abierta.</strong></p>"}
           <div class="form-actions" style="margin-top: 12px;">
-            ${
-              !isClosed
-                ? `<button type="button" id="btnEditConsultation">Editar consulta</button>
-                   <button type="button" id="btnCloseConsultation">Cerrar consulta</button>`
-                : ""
+            ${!isClosed
+              ? `<button type="button" id="btnEditConsultation">Editar consulta</button>
+                 <button type="button" id="btnCloseConsultation">Cerrar consulta</button>`
+              : ""
             }
           </div>
         </section>
@@ -105,48 +162,44 @@ export async function initConsultationDetailView(params = new URLSearchParams())
 
         <section class="detail-box">
           <h2>Antecedentes médicos</h2>
-          ${
-            medicalHistory.length
-              ? `<ul>${medicalHistory
-                  .map(
-                    h => `<li>${escapeHtml(h.description)} <small>(${formatDateTime(h.recorded_at)})</small></li>`
-                  )
-                  .join("")}</ul>`
-              : `<p>Sin antecedentes médicos.</p>`
+          ${medicalHistory.length
+            ? `<ul>${medicalHistory
+                .map(
+                  h => `<li>${escapeHtml(h.description)} <small>(${formatDateTime(h.recorded_at)})</small></li>`
+                )
+                .join("")}</ul>`
+            : `<p>Sin antecedentes médicos.</p>`
           }
         </section>
 
         <section class="detail-box">
           <h2>Antecedentes quirúrgicos</h2>
-          ${
-            surgicalHistory.length
-              ? `<ul>${surgicalHistory
-                  .map(
-                    h => `<li>${escapeHtml(h.description)} <small>(${formatDateTime(h.recorded_at)})</small></li>`
-                  )
-                  .join("")}</ul>`
-              : `<p>Sin antecedentes quirúrgicos.</p>`
+          ${surgicalHistory.length
+            ? `<ul>${surgicalHistory
+                .map(
+                  h => `<li>${escapeHtml(h.description)} <small>(${formatDateTime(h.recorded_at)})</small></li>`
+                )
+                .join("")}</ul>`
+            : `<p>Sin antecedentes quirúrgicos.</p>`
           }
         </section>
 
         <section class="detail-box">
           <h2>Alergias</h2>
-          ${
-            allergyLines.length
-              ? `<ul>${allergyLines
-                  .map(
-                    a => `<li>${escapeHtml(a.allergen)}${a.reaction ? ` - ${escapeHtml(a.reaction)}` : ""}</li>`
-                  )
-                  .join("")}</ul>`
-              : `<p>Sin alergias registradas.</p>`
+          ${allergyLines.length
+            ? `<ul>${allergyLines
+                .map(
+                  a => `<li>${escapeHtml(a.allergen)}${a.reaction ? ` - ${escapeHtml(a.reaction)}` : ""}</li>`
+                )
+                .join("")}</ul>`
+            : `<p>Sin alergias registradas.</p>`
           }
         </section>
 
         <section class="detail-box">
           <h2>Signos vitales</h2>
-          ${
-            vital
-              ? `
+          ${vital
+            ? `
                 <p><strong>Peso:</strong> ${vital.weight_kg ?? "-"} kg</p>
                 <p><strong>Altura:</strong> ${vital.height_cm ?? "-"} cm</p>
                 <p><strong>Temperatura:</strong> ${vital.temperature_c ?? "-"} °C</p>
@@ -155,63 +208,61 @@ export async function initConsultationDetailView(params = new URLSearchParams())
                 <p><strong>Frecuencia respiratoria:</strong> ${vital.respiratory_rate ?? "-"}</p>
                 <p><strong>Registrado:</strong> ${formatDateTime(vital.recorded_at)}</p>
               `
-              : `<p>No hay signos vitales registrados.</p>`
+            : `<p>No hay signos vitales registrados.</p>`
           }
         </section>
 
         <section class="detail-box">
           <h2>Diagnóstico</h2>
-          ${
-            diagnoses.length
-              ? `<ul>${diagnoses
-                  .slice()
-                  .sort((a, b) => Number(b.is_primary) - Number(a.is_primary))
-                  .map(
-                    d => `
+          ${diagnoses.length
+            ? `<ul>${diagnoses
+                .slice()
+                .sort((a, b) => Number(b.is_primary) - Number(a.is_primary))
+                .map(
+                  d => `
                       <li>
                         <strong>${escapeHtml(d.diagnosis_catalog?.code || "-")}</strong>
                         - ${escapeHtml(d.diagnosis_catalog?.description || "-")}
                         ${d.is_primary ? "<span>(Principal)</span>" : ""}
                       </li>
                     `
-                  )
-                  .join("")}</ul>`
-              : `<p>Sin diagnóstico registrado.</p>`
+                )
+                .join("")}</ul>`
+            : `<p>Sin diagnóstico registrado.</p>`
           }
         </section>
 
         <section class="detail-box">
           <h2>Plan</h2>
-          ${
-            planItems.length
-              ? `<ol>${planItems
-                  .slice()
-                  .sort((a, b) => a.sort_order - b.sort_order)
-                  .map(item => `<li>${escapeHtml(item.description)}</li>`)
-                  .join("")}</ol>`
-              : `<p>Sin plan registrado.</p>`
+          ${planItems.length
+            ? `<ol>${planItems
+                .slice()
+                .sort((a, b) => a.sort_order - b.sort_order)
+                .map(item => `<li>${escapeHtml(item.description)}</li>`)
+                .join("")}</ol>`
+            : `<p>Sin plan registrado.</p>`
           }
         </section>
 
         <section class="detail-box">
           <h2>Próxima cita</h2>
-          ${
-            appointment
-              ? `
+          ${appointment
+            ? `
                 <p><strong>Fecha:</strong> ${formatDateTime(appointment.scheduled_at)}</p>
                 <p><strong>Motivo:</strong> ${escapeHtml(appointment.reason || "-")}</p>
                 <p><strong>Estado:</strong> ${escapeHtml(appointment.appointment_statuses?.name || "-")}</p>
               `
-              : `<p>No hay próxima cita registrada.</p>`
+            : `<p>No hay próxima cita registrada.</p>`
           }
         </section>
 
-        <section class="detail-box">
+        ${ticketHtml}
+
+        <section class="detail-box" style="grid-column: 1 / -1;">
           <h2>Adjuntos</h2>
-          ${
-            isClosed
-              ? `<p>La consulta está cerrada. No se permiten nuevos adjuntos.</p>`
-              : `
+          ${isClosed
+            ? `<p>La consulta está cerrada. No se permiten nuevos adjuntos.</p>`
+            : `
                 <form id="attachmentForm" class="attachment-form">
                   <label>Título</label>
                   <input type="text" name="title" placeholder="Ej: Laboratorio, Ultrasonido, Imagen" />
@@ -227,26 +278,24 @@ export async function initConsultationDetailView(params = new URLSearchParams())
               `
           }
 
-          <div class="attachment-list">
-            ${
-              attachmentLines.length
-                ? attachmentLines
-                    .map(
-                      a => `
+          <div class="attachment-list" style="margin-top: 15px;">
+            ${attachmentLines.length
+              ? attachmentLines
+                  .map(
+                    a => `
                         <div class="attachment-item">
                           <strong>${escapeHtml(a.title || a.original_filename || "Adjunto")}</strong>
                           <p>${escapeHtml(a.description || "")}</p>
                           <small>${escapeHtml(a.study_types?.name || "-")}</small><br>
-                          ${
-                            a.signed_url
-                              ? `<a href="${escapeHtml(a.signed_url)}" target="_blank" rel="noopener noreferrer">Ver / descargar</a>`
-                              : `<span>No disponible</span>`
+                          ${a.signed_url
+                            ? `<a href="${escapeHtml(a.signed_url)}" target="_blank" rel="noopener noreferrer">Ver / descargar</a>`
+                            : `<span>No disponible</span>`
                           }
                         </div>
                       `
-                    )
-                    .join("")
-                : `<p>No hay adjuntos cargados.</p>`
+                  )
+                  .join("")
+              : `<p>No hay adjuntos cargados.</p>`
             }
           </div>
         </section>
@@ -386,6 +435,7 @@ export async function initConsultationDetailView(params = new URLSearchParams())
 
     const isClosed = Boolean(detail.closed_at);
 
+    // Renderiza todo el contenedor principal incluyendo el ticket.
     container.innerHTML = renderConsultationDetail(
       detail,
       history,
@@ -400,6 +450,37 @@ export async function initConsultationDetailView(params = new URLSearchParams())
     const printBtn = document.getElementById("btnPrintConsultation");
     if (printBtn) {
       printBtn.addEventListener("click", () => window.print());
+    }
+
+    // 4. Evento del botón de Imprimir Ticket
+    const ticketPrintBtn = document.getElementById("btnPrintTicket");
+    if (ticketPrintBtn) {
+      ticketPrintBtn.addEventListener("click", () => {
+        const ticket = detail.consultation_tickets;
+
+        if (!ticket) {
+          alert("Esta consulta no tiene ticket.");
+          return;
+        }
+
+        const html = buildTicketPrintHtml(
+          ticket,
+          detail.patients,
+          detail
+        );
+
+        const win = window.open("", "_blank");
+        if(win) {
+          win.document.open();
+          win.document.write(html);
+          win.document.close();
+          win.focus();
+
+          setTimeout(() => {
+            win.print();
+          }, 300);
+        }
+      });
     }
 
     const editBtn = document.getElementById("btnEditConsultation");
