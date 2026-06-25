@@ -4,7 +4,9 @@ import {
   getPatientsDetail,
   getAppointmentsDetail,
   getDiagnosesDetail,
-  getTicketsDetail
+  getTicketsDetail,
+  getPatientExpensesDetail,
+  getPatientExpensesSummaryDetail
 } from "../models/reportDetailModel.js";
 
 function escapeHtml(str) {
@@ -33,6 +35,7 @@ export async function initReportDetailView(params = new URLSearchParams()) {
   params = getParamsSafe(params);
 
   const moduleFromUrl = (params.get("module") || "consultas").toLowerCase();
+  const patientIdFromUrl = params.get("patient_id") || "";
 
   const moduleSelect = document.getElementById("reportModule");
   const fromInput = document.getElementById("reportFrom");
@@ -144,6 +147,26 @@ export async function initReportDetailView(params = new URLSearchParams()) {
         return;
       }
 
+      if (module === "gastos") {
+        const detailRows = await getPatientExpensesDetail(from, to, patientIdFromUrl || null);
+        const summaryRows = await getPatientExpensesSummaryDetail(from, to, patientIdFromUrl || null);
+
+        const totalPatients = summaryRows.length;
+        const totalExpenses = summaryRows.reduce((acc, r) => acc + Number(r.total_amount ?? 0), 0);
+        const totalPaid = summaryRows.reduce((acc, r) => acc + Number(r.paid_amount ?? 0), 0);
+        const totalPending = summaryRows.reduce((acc, r) => acc + Number(r.pending_amount ?? 0), 0);
+
+        if (title) title.textContent = "Detalle de gastos por paciente";
+        if (summary) summary.innerHTML = renderSummaryCards([
+          { label: "Pacientes con gasto", value: totalPatients },
+          { label: "Total gastado", value: `$${Number(totalExpenses).toFixed(2)}` },
+          { label: "Pagado", value: `$${Number(totalPaid).toFixed(2)}` },
+          { label: "Pendiente", value: `$${Number(totalPending).toFixed(2)}` }
+        ]);
+        body.innerHTML = renderExpenses(detailRows, summaryRows);
+        return;
+      }
+
       if (title) title.textContent = "Detalle";
       body.innerHTML = "<p>Módulo no reconocido.</p>";
     } catch (error) {
@@ -176,6 +199,7 @@ function getModuleLabel(module) {
     case "citas": return "Citas";
     case "diagnosticos": return "Diagnósticos";
     case "tickets": return "Tickets";
+    case "gastos": return "Gastos por paciente";
     default: return "Detalle";
   }
 }
@@ -198,7 +222,7 @@ function formatDateTime(value) {
   if (!value) return "-";
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) return "-";
-  return d.toLocaleString();
+  return d.toLocaleString("es-SV");
 }
 
 function formatPatient(patient) {
@@ -371,4 +395,76 @@ function renderTickets(rows) {
       </tbody>
     </table>
   `;
+}
+
+function renderExpenses(detailRows, summaryRows) {
+  if (!detailRows?.length && !summaryRows?.length) {
+    return `<p>No hay gastos por paciente para el período seleccionado.</p>`;
+  }
+
+  const patientSummaryHtml = summaryRows?.length
+    ? `
+      <h3 style="margin-top: 0;">Resumen por paciente</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>Paciente</th>
+            <th>Expediente</th>
+            <th>Total tickets</th>
+            <th>Total gastado</th>
+            <th>Pagado</th>
+            <th>Pendiente</th>
+            <th>Último gasto</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${summaryRows.map(row => `
+            <tr>
+              <td>${escapeHtml(row.patient_name || "-")}</td>
+              <td>${escapeHtml(row.medical_record_number || "-")}</td>
+              <td>${Number(row.total_tickets ?? 0)}</td>
+              <td>$${Number(row.total_amount ?? 0).toFixed(2)}</td>
+              <td>$${Number(row.paid_amount ?? 0).toFixed(2)}</td>
+              <td>$${Number(row.pending_amount ?? 0).toFixed(2)}</td>
+              <td>${escapeHtml(formatDateTime(row.last_ticket_at))}</td>
+            </tr>
+          `).join("")}
+        </tbody>
+      </table>
+    `
+    : "";
+
+  const detailHtml = detailRows?.length
+    ? `
+      <h3>Detalle de movimientos</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>Fecha</th>
+            <th>Paciente</th>
+            <th>Expediente</th>
+            <th>Monto</th>
+            <th>Estado</th>
+            <th>Método</th>
+            <th>Referencia</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${detailRows.map(row => `
+            <tr>
+              <td>${escapeHtml(formatDateTime(row.issued_at))}</td>
+              <td>${escapeHtml(row.patient_name || "-")}</td>
+              <td>${escapeHtml(row.medical_record_number || "-")}</td>
+              <td>$${Number(row.amount ?? 0).toFixed(2)} ${escapeHtml(row.currency || "")}</td>
+              <td>${escapeHtml(row.payment_status || "-")}</td>
+              <td>${escapeHtml(row.payment_method || "-")}</td>
+              <td>${escapeHtml(row.reference || "-")}</td>
+            </tr>
+          `).join("")}
+        </tbody>
+      </table>
+    `
+    : "";
+
+  return `${patientSummaryHtml}${detailHtml}`;
 }

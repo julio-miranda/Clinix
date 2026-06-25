@@ -198,3 +198,39 @@ export async function getTicketsDetail(from, to) {
   if (error) throw error;
   return data ?? [];
 }
+
+export async function getPatientExpensesDetail(from, to, patientId = null) {
+  let query = supabase
+    .from("vw_patient_expense_details")
+    .select("*")
+    .order("issued_at", { ascending: false });
+
+  const fromISO = toDayStartISO(from);
+  const toISO = toDayEndISO(to);
+
+  if (fromISO) query = query.gte("issued_at", fromISO);
+  if (toISO) query = query.lte("issued_at", toISO);
+  if (patientId) query = query.eq("patient_id", patientId);
+
+  const { data, error } = await query;
+  if (error) throw error;
+  return data ?? [];
+}
+
+export async function getPatientExpensesSummaryDetail(from, to, patientId = null) {
+  let query = supabase
+    .from("vw_patient_expenses")
+    .select("*")
+    .order("total_amount", { ascending: false });
+
+  const fromISO = toDayStartISO(from);
+  const toISO = toDayEndISO(to);
+
+  if (fromISO) query = query.gte("last_ticket_at", fromISO);
+  if (toISO) query = query.lte("last_ticket_at", toISO);
+  if (patientId) query = query.eq("patient_id", patientId);
+
+  const { data, error } = await query;
+  if (error) throw error;
+  return data ?? [];
+}

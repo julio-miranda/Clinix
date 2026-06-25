@@ -5,7 +5,8 @@ import {
   getTopDiagnoses,
   getPendingAppointments,
   getNewPatientsByRange,
-  getTicketsByRange
+  getTicketsByRange,
+  getPatientExpensesByRange
 } from "../models/reportModel.js";
 
 function escapeHtml(str) {
@@ -85,16 +86,30 @@ async function loadAllReports() {
   const diagnosesContainer = document.getElementById("reportDiagnoses");
   const appointmentsContainer = document.getElementById("reportAppointments");
   const ticketsContainer = document.getElementById("reportTickets");
+  const expensesContainer = document.getElementById("reportPatientExpenses");
 
   try {
-    const [summary, consultations, diagnoses, appointments, patients, tickets] = await Promise.all([
+    const [
+      summary,
+      consultations,
+      diagnoses,
+      appointments,
+      patients,
+      tickets,
+      expenses
+    ] = await Promise.all([
       getDashboardSummary(),
       getConsultationsByRange(from, to),
       getTopDiagnoses(10),
       getPendingAppointments(from, to),
       getNewPatientsByRange(from, to),
-      getTicketsByRange(from, to)
+      getTicketsByRange(from, to),
+      getPatientExpensesByRange(from, to)
     ]);
+
+    const totalExpenses = expenses.reduce((acc, row) => acc + Number(row.total_amount ?? 0), 0);
+    const totalPaidExpenses = expenses.reduce((acc, row) => acc + Number(row.paid_amount ?? 0), 0);
+    const totalPendingExpenses = expenses.reduce((acc, row) => acc + Number(row.pending_amount ?? 0), 0);
 
     if (summaryContainer) {
       summaryContainer.innerHTML = `
@@ -106,6 +121,9 @@ async function loadAllReports() {
           <div class="summary-card"><h3>${patients.length}</h3><p>Pacientes nuevos</p></div>
           <div class="summary-card"><h3>${summary.total_tickets ?? 0}</h3><p>Tickets</p></div>
           <div class="summary-card"><h3>$${Number(summary.total_collected ?? 0).toFixed(2)}</h3><p>Total cobrado</p></div>
+          <div class="summary-card"><h3>$${Number(totalExpenses).toFixed(2)}</h3><p>Total gastos</p></div>
+          <div class="summary-card"><h3>$${Number(totalPaidExpenses).toFixed(2)}</h3><p>Gastos pagados</p></div>
+          <div class="summary-card"><h3>$${Number(totalPendingExpenses).toFixed(2)}</h3><p>Gastos pendientes</p></div>
         </div>
       `;
     }
@@ -114,6 +132,7 @@ async function loadAllReports() {
     if (diagnosesContainer) diagnosesContainer.innerHTML = renderDiagnosesTable(diagnoses);
     if (appointmentsContainer) appointmentsContainer.innerHTML = renderAppointmentsTable(appointments);
     if (ticketsContainer) ticketsContainer.innerHTML = renderTicketsTable(tickets);
+    if (expensesContainer) expensesContainer.innerHTML = renderPatientExpensesTable(expenses);
   } catch (error) {
     console.error("ERROR REPORTES:", error);
 
@@ -122,6 +141,7 @@ async function loadAllReports() {
     if (diagnosesContainer) diagnosesContainer.innerHTML = "";
     if (appointmentsContainer) appointmentsContainer.innerHTML = "";
     if (ticketsContainer) ticketsContainer.innerHTML = "";
+    if (expensesContainer) expensesContainer.innerHTML = "";
   }
 }
 
@@ -228,6 +248,41 @@ function renderTicketsTable(rows) {
             <td>$${Number(row.amount ?? 0).toFixed(2)} ${escapeHtml(row.currency || "")}</td>
             <td>${escapeHtml(row.payment_method || "-")}</td>
             <td>${escapeHtml(row.payment_status || "-")}</td>
+          </tr>
+        `).join("")}
+      </tbody>
+    </table>
+  `;
+}
+
+function renderPatientExpensesTable(rows) {
+  if (!rows?.length) return "<p>No hay gastos por paciente en el período seleccionado.</p>";
+
+  return `
+    <table>
+      <thead>
+        <tr>
+          <th>Paciente</th>
+          <th>Expediente</th>
+          <th>Total tickets</th>
+          <th>Total gastado</th>
+          <th>Pagado</th>
+          <th>Pendiente</th>
+          <th>Último gasto</th>
+          <th>Ver detalle</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${rows.map((row) => `
+          <tr>
+            <td>${escapeHtml(row.patient_name || "-")}</td>
+            <td>${escapeHtml(row.medical_record_number || "-")}</td>
+            <td>${Number(row.total_tickets ?? 0)}</td>
+            <td>$${Number(row.total_amount ?? 0).toFixed(2)}</td>
+            <td>$${Number(row.paid_amount ?? 0).toFixed(2)}</td>
+            <td>$${Number(row.pending_amount ?? 0).toFixed(2)}</td>
+            <td>${escapeHtml(formatDateTime(row.last_ticket_at))}</td>
+            <td><a href="#/reporte-detalle?module=gastos&patient_id=${encodeURIComponent(row.patient_id)}">Detalle</a></td>
           </tr>
         `).join("")}
       </tbody>

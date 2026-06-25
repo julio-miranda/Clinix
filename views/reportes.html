@@ -2,7 +2,7 @@
   <div class="detail-header">
     <div>
       <h1>Reportes</h1>
-      <p>Consultas, pacientes, citas, diagnósticos y cobros.</p>
+      <p>Consultas, pacientes, citas, diagnósticos, cobros y gastos por paciente.</p>
     </div>
     <a href="#/dashboard" class="btn-secondary"
       style="text-decoration:none; display:inline-flex; align-items:center; justify-content:center;">
@@ -49,6 +49,11 @@
   </div>
 
   <div class="card">
+    <h2>Gastos por paciente</h2>
+    <div id="reportPatientExpenses"></div>
+  </div>
+
+  <div class="card">
     <h2>Consultas</h2>
     <p>Detalle de consultas por período.</p>
     <a href="#/reporte-detalle?module=consultas">Abrir detalle</a>
@@ -76,5 +81,11 @@
     <h2>Tickets</h2>
     <p>Detalle de cobros por consulta.</p>
     <a href="#/reporte-detalle?module=tickets">Abrir detalle</a>
+  </div>
+
+  <div class="card">
+    <h2>Gastos</h2>
+    <p>Detalle de gastos por paciente.</p>
+    <a href="#/reporte-detalle?module=gastos">Abrir detalle</a>
   </div>
 </section>

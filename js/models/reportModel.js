@@ -136,3 +136,22 @@ export async function getTicketsByRange(from, to) {
   if (error) throw error;
   return data ?? [];
 }
+
+export async function getPatientExpensesByRange(from, to) {
+  let query = supabase
+    .from("vw_patient_expenses")
+    .select("*")
+    .order("total_amount", { ascending: false });
+
+  if (from) {
+    query = query.gte("last_ticket_at", from);
+  }
+
+  if (to) {
+    query = query.lte("last_ticket_at", to);
+  }
+
+  const { data, error } = await query;
+  if (error) throw error;
+  return data ?? [];
+}
