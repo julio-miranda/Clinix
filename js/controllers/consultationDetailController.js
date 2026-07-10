@@ -10,7 +10,6 @@ import { uploadEncounterAttachment } from "../models/attachmentModel.js";
 import { getSessionUser } from "./authController.js";
 import { createAuditLog } from "../models/auditModel.js";
 import { closeEncounter } from "../models/encounterModel.js";
-// 3. Importar el generador del ticket
 import { buildTicketPrintHtml } from "../models/consultationTicketModel.js";
 
 export async function initConsultationDetailView(params = new URLSearchParams()) {
@@ -66,12 +65,11 @@ export async function initConsultationDetailView(params = new URLSearchParams())
     const planItems = Array.isArray(detail.encounter_plan_items) ? detail.encounter_plan_items : [];
     const appointment = Array.isArray(detail.appointments) ? detail.appointments[0] : null;
 
-    const medicalHistory = history.filter(h => h.patient_history_types?.code === "MEDICAL");
-    const surgicalHistory = history.filter(h => h.patient_history_types?.code === "SURGICAL");
+    const medicalHistory = history.filter((h) => h.patient_history_types?.code === "MEDICAL");
+    const surgicalHistory = history.filter((h) => h.patient_history_types?.code === "SURGICAL");
     const allergyLines = Array.isArray(allergies) ? allergies : [];
     const attachmentLines = Array.isArray(attachments) ? attachments : [];
 
-    // 1. Integración del Ticket de Consulta
     const ticket = detail.consultation_tickets;
     const ticketHtml = ticket
       ? `
@@ -165,7 +163,7 @@ export async function initConsultationDetailView(params = new URLSearchParams())
           ${medicalHistory.length
             ? `<ul>${medicalHistory
                 .map(
-                  h => `<li>${escapeHtml(h.description)} <small>(${formatDateTime(h.recorded_at)})</small></li>`
+                  (h) => `<li>${escapeHtml(h.description)} <small>(${formatDateTime(h.recorded_at)})</small></li>`
                 )
                 .join("")}</ul>`
             : `<p>Sin antecedentes médicos.</p>`
@@ -177,7 +175,7 @@ export async function initConsultationDetailView(params = new URLSearchParams())
           ${surgicalHistory.length
             ? `<ul>${surgicalHistory
                 .map(
-                  h => `<li>${escapeHtml(h.description)} <small>(${formatDateTime(h.recorded_at)})</small></li>`
+                  (h) => `<li>${escapeHtml(h.description)} <small>(${formatDateTime(h.recorded_at)})</small></li>`
                 )
                 .join("")}</ul>`
             : `<p>Sin antecedentes quirúrgicos.</p>`
@@ -189,7 +187,7 @@ export async function initConsultationDetailView(params = new URLSearchParams())
           ${allergyLines.length
             ? `<ul>${allergyLines
                 .map(
-                  a => `<li>${escapeHtml(a.allergen)}${a.reaction ? ` - ${escapeHtml(a.reaction)}` : ""}</li>`
+                  (a) => `<li>${escapeHtml(a.allergen)}${a.reaction ? ` - ${escapeHtml(a.reaction)}` : ""}</li>`
                 )
                 .join("")}</ul>`
             : `<p>Sin alergias registradas.</p>`
@@ -219,7 +217,7 @@ export async function initConsultationDetailView(params = new URLSearchParams())
                 .slice()
                 .sort((a, b) => Number(b.is_primary) - Number(a.is_primary))
                 .map(
-                  d => `
+                  (d) => `
                       <li>
                         <strong>${escapeHtml(d.diagnosis_catalog?.code || "-")}</strong>
                         - ${escapeHtml(d.diagnosis_catalog?.description || "-")}
@@ -238,7 +236,7 @@ export async function initConsultationDetailView(params = new URLSearchParams())
             ? `<ol>${planItems
                 .slice()
                 .sort((a, b) => a.sort_order - b.sort_order)
-                .map(item => `<li>${escapeHtml(item.description)}</li>`)
+                .map((item) => `<li>${escapeHtml(item.description)}</li>`)
                 .join("")}</ol>`
             : `<p>Sin plan registrado.</p>`
           }
@@ -282,7 +280,7 @@ export async function initConsultationDetailView(params = new URLSearchParams())
             ${attachmentLines.length
               ? attachmentLines
                   .map(
-                    a => `
+                    (a) => `
                         <div class="attachment-item">
                           <strong>${escapeHtml(a.title || a.original_filename || "Adjunto")}</strong>
                           <p>${escapeHtml(a.description || "")}</p>
@@ -324,12 +322,16 @@ export async function initConsultationDetailView(params = new URLSearchParams())
       try {
         await closeEncounter(encounterId, user.id);
 
-        await createAuditLog({
-          actionCode: "UPDATE",
-          entityName: "encounters",
-          entityId: encounterId,
-          details: { action: "close" }
-        });
+        try {
+          await createAuditLog({
+            actionCode: "UPDATE",
+            entityName: "encounters",
+            entityId: encounterId,
+            details: { action: "close" }
+          });
+        } catch (auditError) {
+          console.warn("No se pudo registrar auditoría de cierre:", auditError);
+        }
 
         alert("Consulta cerrada correctamente.");
         window.location.reload();
@@ -388,16 +390,20 @@ export async function initConsultationDetailView(params = new URLSearchParams())
           studyTypeCode
         });
 
-        await createAuditLog({
-          actionCode: "UPLOAD",
-          entityName: "encounter_studies",
-          entityId: savedAttachment.id,
-          details: {
-            encounterId,
-            title: savedAttachment.title,
-            originalFilename: savedAttachment.original_filename
-          }
-        });
+        try {
+          await createAuditLog({
+            actionCode: "UPLOAD",
+            entityName: "encounter_studies",
+            entityId: savedAttachment.id,
+            details: {
+              encounterId,
+              title: savedAttachment.title,
+              originalFilename: savedAttachment.original_filename
+            }
+          });
+        } catch (auditError) {
+          console.warn("No se pudo registrar auditoría de adjunto:", auditError);
+        }
 
         alert("Archivo subido correctamente.");
         window.location.reload();
@@ -435,7 +441,6 @@ export async function initConsultationDetailView(params = new URLSearchParams())
 
     const isClosed = Boolean(detail.closed_at);
 
-    // Renderiza todo el contenedor principal incluyendo el ticket.
     container.innerHTML = renderConsultationDetail(
       detail,
       history,
@@ -452,7 +457,6 @@ export async function initConsultationDetailView(params = new URLSearchParams())
       printBtn.addEventListener("click", () => window.print());
     }
 
-    // 4. Evento del botón de Imprimir Ticket
     const ticketPrintBtn = document.getElementById("btnPrintTicket");
     if (ticketPrintBtn) {
       ticketPrintBtn.addEventListener("click", () => {
@@ -463,14 +467,10 @@ export async function initConsultationDetailView(params = new URLSearchParams())
           return;
         }
 
-        const html = buildTicketPrintHtml(
-          ticket,
-          detail.patients,
-          detail
-        );
+        const html = buildTicketPrintHtml(ticket, detail.patients, detail);
 
         const win = window.open("", "_blank");
-        if(win) {
+        if (win) {
           win.document.open();
           win.document.write(html);
           win.document.close();

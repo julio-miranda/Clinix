@@ -34,7 +34,7 @@ export async function createAuditLog({
     throw new Error("No hay usuario autenticado para generar la auditoría.");
   }
 
-  const { data, error } = await supabase
+  const { error } = await supabase
     .from("audit_logs")
     .insert({
       user_id: currentUserId,
@@ -43,12 +43,10 @@ export async function createAuditLog({
       entity_id: entityId,
       details,
       ip_address: ipAddress
-    })
-    .select()
-    .single();
+    });
 
   if (error) throw error;
-  return data;
+  return true;
 }
 
 export async function listAuditLogs(limit = 50) {
