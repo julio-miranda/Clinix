@@ -1,0 +1,79 @@
+<!-- views/perfil.html -->
+<section class="page">
+  <div class="detail-header">
+    <div>
+      <h1>Mi perfil</h1>
+      <p>Ver y actualizar tus datos personales y tu contraseña</p>
+    </div>
+
+    <div class="toolbar">
+      <a href="#/dashboard" class="btn-secondary"
+        style="text-decoration:none; display:inline-flex; align-items:center; justify-content:center;">
+        ← Volver
+      </a>
+    </div>
+  </div>
+
+  <div class="card">
+    <div id="profileAlert" style="margin-bottom: 16px;"></div>
+
+    <form id="profileForm">
+      <div class="form-section">
+        <h2>Datos de perfil</h2>
+
+        <label for="profileFullName">Nombre completo</label>
+        <input type="text" id="profileFullName" name="full_name" required />
+
+        <label for="profileEmail">Correo electrónico</label>
+        <input type="email" id="profileEmail" name="email" readonly />
+
+        <label for="profileRole">Rol</label>
+        <input type="text" id="profileRole" name="role" readonly />
+
+        <label for="profileActive">Estado</label>
+        <input type="text" id="profileActive" name="active" readonly />
+
+        <small>
+          El rol y el estado se administran desde el módulo de usuarios.
+        </small>
+      </div>
+
+      <div class="form-section" style="margin-top: 18px;">
+        <h2>Cambiar contraseña</h2>
+
+        <label for="profilePassword">Nueva contraseña</label>
+        <input
+          type="password"
+          id="profilePassword"
+          name="password"
+          placeholder="Dejar vacío si no desea cambiarla"
+          autocomplete="new-password"
+        />
+
+        <label for="profileConfirmPassword">Confirmar nueva contraseña</label>
+        <input
+          type="password"
+          id="profileConfirmPassword"
+          name="confirm_password"
+          placeholder="Repita la nueva contraseña"
+          autocomplete="new-password"
+        />
+
+        <small>
+          La contraseña nueva debe tener al menos 12 caracteres.
+        </small>
+      </div>
+
+      <div class="form-actions">
+        <a href="#/dashboard" class="btn-secondary"
+          style="text-decoration:none; display:inline-flex; align-items:center; justify-content:center;">
+          Cancelar
+        </a>
+
+        <button type="submit" class="btn-primary">
+          Guardar cambios
+        </button>
+      </div>
+    </form>
+  </div>
+</section>

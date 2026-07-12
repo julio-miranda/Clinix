@@ -3,7 +3,7 @@ import {
   login,
   logout,
   getCurrentUser,
-  getProfile,
+  getProfile
 } from "../models/authModel.js";
 
 const SESSION_USER_KEY = "user";
@@ -12,7 +12,7 @@ const VALID_ROLES = new Set(["admin", "medico", "recepcion"]);
 const ROLE_LABELS = {
   admin: "ADMIN",
   medico: "MEDICO",
-  recepcion: "RECEPCION",
+  recepcion: "RECEPCION"
 };
 
 function normalizeRole(role) {
@@ -44,18 +44,16 @@ function buildSessionUser(authUser, profile) {
       ? profile.roles.map(item => normalizeRole(item?.code)).filter(Boolean)
       : [role],
     active: true,
-    validated_at: new Date().toISOString(),
+    validated_at: new Date().toISOString()
   };
 }
 
 function saveSessionUser(user) {
-  console.log("[auth] Guardando usuario en sessionStorage:", user);
   sessionStorage.setItem(SESSION_USER_KEY, JSON.stringify(user));
 }
 
 export function clearLocalAuthArtifacts() {
   try {
-    console.warn("[auth] Limpiando sessionStorage.");
     sessionStorage.removeItem(SESSION_USER_KEY);
   } catch (err) {
     console.error("ERROR LIMPIANDO SESIÓN:", err);
@@ -64,7 +62,6 @@ export function clearLocalAuthArtifacts() {
 
 async function clearRemoteSession() {
   try {
-    console.warn("[auth] Cerrando sesión remota...");
     await logout();
   } catch (err) {
     console.error("LOGOUT ERROR:", err);
@@ -74,22 +71,16 @@ async function clearRemoteSession() {
 }
 
 async function loadSessionUser() {
-  console.log("[auth] Verificando sesión activa...");
-
   const authUser = await getCurrentUser();
-  console.log("[auth] Usuario Auth actual:", authUser);
 
   if (!authUser) {
-    console.warn("[auth] No hay sesión activa en Supabase.");
     clearLocalAuthArtifacts();
     return null;
   }
 
   const profile = await getProfile(authUser.id);
-  console.log("[auth] Perfil de aplicación:", profile);
 
   if (!profile) {
-    console.warn("[auth] No existe perfil para el usuario actual.");
     await clearRemoteSession();
     return null;
   }
@@ -97,7 +88,6 @@ async function loadSessionUser() {
   const sessionUser = buildSessionUser(authUser, profile);
   saveSessionUser(sessionUser);
 
-  console.log("[auth] Sesión válida cargada:", sessionUser);
   return sessionUser;
 }
 
@@ -110,10 +100,8 @@ export async function initLoginView() {
 
   try {
     const existingUser = await loadSessionUser();
-    console.log("[auth] initLoginView -> existingUser:", existingUser);
 
     if (existingUser?.id) {
-      console.log("[auth] Ya existe sesión. Redirigiendo por rol:", existingUser.role);
       redirectByRole(existingUser.role);
     }
   } catch (err) {
@@ -124,12 +112,10 @@ export async function initLoginView() {
 
 export async function initDashboardView() {
   let user = getSessionUser();
-  console.log("[auth] initDashboardView -> usuario desde sessionStorage:", user);
 
   if (!user) {
     try {
       user = await loadSessionUser();
-      console.log("[auth] initDashboardView -> usuario recargado:", user);
     } catch (err) {
       console.error("DASHBOARD SESSION ERROR:", err);
       user = null;
@@ -137,7 +123,6 @@ export async function initDashboardView() {
   }
 
   if (!user) {
-    console.warn("[auth] No hay sesión válida. Redirigiendo al login.");
     window.location.hash = "#/login";
     return;
   }
@@ -168,8 +153,6 @@ export async function handleLogin(event) {
     const email = form.email.value.trim().toLowerCase();
     const password = form.password.value;
 
-    console.log("[auth] Intento de login:", { email, hasPassword: !!password });
-
     if (!email || !password) {
       alert("Complete el correo y la contraseña.");
       return;
@@ -178,14 +161,12 @@ export async function handleLogin(event) {
     const { error, data } = await login(email, password);
 
     if (error) {
-      console.error("[auth] Error Supabase login:", error);
       clearLocalAuthArtifacts();
       alert("Error al iniciar sesión: " + error.message);
       return;
     }
 
     const authUser = data?.user;
-    console.log("[auth] Usuario autenticado:", authUser);
 
     if (!authUser) {
       await clearRemoteSession();
@@ -194,7 +175,6 @@ export async function handleLogin(event) {
     }
 
     const profile = await getProfile(authUser.id);
-    console.log("[auth] Perfil obtenido tras login:", profile);
 
     if (!profile) {
       await clearRemoteSession();
@@ -205,7 +185,6 @@ export async function handleLogin(event) {
     const sessionUser = buildSessionUser(authUser, profile);
     saveSessionUser(sessionUser);
 
-    console.log("[auth] Login exitoso. Redirigiendo por rol:", sessionUser.role);
     redirectByRole(sessionUser.role);
   } catch (err) {
     console.error("LOGIN ERROR:", err);
@@ -217,7 +196,6 @@ export async function handleLogin(event) {
 }
 
 export async function handleLogout() {
-  console.log("[auth] Cerrando sesión...");
   await clearRemoteSession();
   window.location.hash = "#/login";
 }
@@ -225,27 +203,21 @@ export async function handleLogout() {
 export function getSessionUser() {
   try {
     const raw = sessionStorage.getItem(SESSION_USER_KEY);
-    console.log("[auth] getSessionUser() raw:", raw);
-
     if (!raw) return null;
 
     const parsed = JSON.parse(raw);
     const role = normalizeRole(parsed?.role);
 
     if (!parsed?.id || !role || parsed.active !== true) {
-      console.warn("[auth] Sesión local inválida. Se elimina.");
       sessionStorage.removeItem(SESSION_USER_KEY);
       return null;
     }
 
-    const sessionUser = {
+    return {
       ...parsed,
       role,
-      role_label: parsed.role_label || ROLE_LABELS[role],
+      role_label: parsed.role_label || ROLE_LABELS[role]
     };
-
-    console.log("[auth] getSessionUser() válido:", sessionUser);
-    return sessionUser;
   } catch (err) {
     console.error("SESSION PARSE ERROR:", err);
     sessionStorage.removeItem(SESSION_USER_KEY);
@@ -255,16 +227,13 @@ export function getSessionUser() {
 
 export async function requireAuth() {
   try {
-    console.log("[auth] requireAuth() iniciado...");
     const user = await loadSessionUser();
 
     if (!user) {
-      console.warn("[auth] requireAuth() -> sin sesión. Redirigiendo al login.");
       window.location.hash = "#/login";
       return false;
     }
 
-    console.log("[auth] requireAuth() -> sesión válida:", user.id);
     return true;
   } catch (err) {
     console.error("AUTH REQUIRED ERROR:", err);
@@ -276,17 +245,16 @@ export async function requireAuth() {
 
 export function redirectByRole(role) {
   const currentRole = normalizeRole(role);
-  console.log("[auth] redirectByRole() ->", currentRole);
 
   switch (currentRole) {
     case "admin":
       window.location.hash = "#/dashboard";
       break;
     case "medico":
-      window.location.hash = "#/consulta";
+      window.location.hash = "#/dashboard";
       break;
     case "recepcion":
-      window.location.hash = "#/pacientes";
+      window.location.hash = "#/dashboard";
       break;
     default:
       window.location.hash = "#/login";
@@ -316,6 +284,4 @@ function filterMenuByRole(role) {
     const visible = !allowedRoles.length || allowedRoles.includes(currentRole);
     card.style.display = visible ? "" : "none";
   });
-
-  console.log("[auth] Menú filtrado por rol:", currentRole);
 }

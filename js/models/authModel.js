@@ -1,4 +1,4 @@
-//js/models/authModel.js
+// js/models/authModel.js
 import { supabase } from "../config/supabase.js";
 
 const ROLE_PRIORITY = ["admin", "medico", "recepcion"];
@@ -18,7 +18,7 @@ function normalizeRoleRow(row) {
   return {
     id: role.id ?? row?.role_id ?? null,
     code,
-    name: role.name ?? code,
+    name: role.name ?? code
   };
 }
 
@@ -26,7 +26,7 @@ function pickPrimaryRole(roles) {
   const roleCodes = new Set(
     (roles || [])
       .map(role => normalizeRoleCode(role?.code))
-      .filter(Boolean),
+      .filter(Boolean)
   );
 
   return ROLE_PRIORITY.find(role => roleCodes.has(role)) || null;
@@ -35,7 +35,7 @@ function pickPrimaryRole(roles) {
 export async function login(email, password) {
   return await supabase.auth.signInWithPassword({
     email,
-    password,
+    password
   });
 }
 
@@ -54,7 +54,7 @@ export async function getSessionAccessToken() {
 export async function getCurrentUser() {
   const {
     data: { session },
-    error: sessionError,
+    error: sessionError
   } = await supabase.auth.getSession();
 
   if (sessionError) {
@@ -67,7 +67,7 @@ export async function getCurrentUser() {
 
   const {
     data: { user },
-    error,
+    error
   } = await supabase.auth.getUser(session.access_token);
 
   if (error) throw error;
@@ -94,7 +94,7 @@ export async function getProfile(userId) {
     return {
       ...appUser,
       role: null,
-      roles: [],
+      roles: []
     };
   }
 
@@ -112,6 +112,6 @@ export async function getProfile(userId) {
   return {
     ...appUser,
     role: pickPrimaryRole(roles),
-    roles,
+    roles
   };
 }

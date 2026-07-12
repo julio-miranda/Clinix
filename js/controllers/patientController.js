@@ -1,3 +1,4 @@
+// js/controllers/patientController.js
 import {
   getSexes,
   getPatients,
@@ -5,7 +6,9 @@ import {
   createPatient,
   updatePatient,
   savePrimaryContact,
-  savePrimaryAddress
+  savePrimaryAddress,
+  upsertPatientVitals,
+  getNextMedicalRecordNumber
 } from "../models/patientModel.js";
 
 function escapeHtml(str) {
@@ -15,6 +18,56 @@ function escapeHtml(str) {
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#39;");
+}
+
+function normalizeDui(value) {
+  return String(value || "")
+    .trim()
+    .toUpperCase()
+    .replace(/\s+/g, "");
+}
+
+function getVitalsPayload(form) {
+  const read = (name) => {
+    const el = form.querySelector(`[name="${name}"]`);
+    return el?.value ? Number(el.value) : null;
+  };
+
+  return {
+    weight_kg: read("weight_kg"),
+    height_cm: read("height_cm"),
+    temperature_c: read("temperature_c"),
+    systolic_bp: read("systolic_bp"),
+    diastolic_bp: read("diastolic_bp"),
+    pulse_rate: read("pulse_rate"),
+    respiratory_rate: read("respiratory_rate")
+  };
+}
+
+function setVitalsIntoForm(form, vitals) {
+  const set = (name, value) => {
+    const el = form.querySelector(`[name="${name}"]`);
+    if (el) el.value = value ?? "";
+  };
+
+  set("weight_kg", vitals?.weight_kg ?? "");
+  set("height_cm", vitals?.height_cm ?? "");
+  set("temperature_c", vitals?.temperature_c ?? "");
+  set("systolic_bp", vitals?.systolic_bp ?? "");
+  set("diastolic_bp", vitals?.diastolic_bp ?? "");
+  set("pulse_rate", vitals?.pulse_rate ?? "");
+  set("respiratory_rate", vitals?.respiratory_rate ?? "");
+}
+
+async function ensureMrnVisible(form) {
+  const mrnField = form.querySelector('[name="medical_record_number"]');
+  if (!mrnField) return;
+
+  mrnField.readOnly = true;
+
+  if (!mrnField.value) {
+    mrnField.value = await getNextMedicalRecordNumber();
+  }
 }
 
 export async function initPatientsView() {
@@ -47,7 +100,12 @@ export async function initPatientFormView(params = new URLSearchParams()) {
   const editingId = params.get("id");
   if (editingId) {
     await loadPatientIntoForm(editingId);
+  } else {
+    await ensureMrnVisible(form);
   }
+
+  const mrnField = form.querySelector('[name="medical_record_number"]');
+  if (mrnField) mrnField.readOnly = true;
 
   form.addEventListener("submit", handlePatientSubmit);
 }
@@ -74,7 +132,7 @@ async function loadSexesSelect(selectedId = "") {
     empty.textContent = "Seleccione...";
     select.appendChild(empty);
 
-    sexes.forEach(s => {
+    sexes.forEach((s) => {
       const option = document.createElement("option");
       option.value = String(s.id);
       option.textContent = s.name || "";
@@ -91,7 +149,7 @@ async function loadSexesSelect(selectedId = "") {
 
 async function loadPatientIntoForm(id) {
   const form = document.getElementById("patientForm");
-  const { patient, primaryContact, primaryAddress } = await getPatientFull(id);
+  const { patient, primaryContact, primaryAddress, vitals } = await getPatientFull(id);
 
   if (!form || !patient) return;
 
@@ -102,6 +160,9 @@ async function loadPatientIntoForm(id) {
 
   const mrn = form.querySelector('[name="medical_record_number"]');
   if (mrn) mrn.value = patient.medical_record_number || "";
+
+  const dui = form.querySelector('[name="dui"]');
+  if (dui) dui.value = patient.dui || "";
 
   const firstName = form.querySelector('[name="first_name"]');
   if (firstName) firstName.value = patient.first_name || "";
@@ -126,6 +187,8 @@ async function loadPatientIntoForm(id) {
 
   const active = form.querySelector('[name="active"]');
   if (active) active.checked = Boolean(patient.active);
+
+  setVitalsIntoForm(form, vitals);
 }
 
 export async function loadPatientsTable(containerId, search = "") {
@@ -145,6 +208,7 @@ export async function loadPatientsTable(containerId, search = "") {
         <thead>
           <tr>
             <th>MRN</th>
+            <th>DUI</th>
             <th>Nombre</th>
             <th>Apellido</th>
             <th>Sexo</th>
@@ -156,6 +220,7 @@ export async function loadPatientsTable(containerId, search = "") {
           ${patients.map(p => `
             <tr>
               <td>${escapeHtml(p.medical_record_number ?? "")}</td>
+              <td>${escapeHtml(p.dui ?? "")}</td>
               <td>${escapeHtml(p.first_name ?? "")}</td>
               <td>${escapeHtml(p.last_name ?? "")}</td>
               <td>${escapeHtml(p.sex?.name ?? "")}</td>
@@ -201,13 +266,16 @@ export async function handlePatientSubmit(event) {
     const form = event.target;
     const editingId = form.dataset.patientId || "";
 
-    const medicalRecordNumber = form.querySelector('[name="medical_record_number"]')?.value?.trim();
+    let medicalRecordNumber = form.querySelector('[name="medical_record_number"]')?.value?.trim();
+    const duiRaw = form.querySelector('[name="dui"]')?.value?.trim();
+    const dui = normalizeDui(duiRaw);
     const firstName = form.querySelector('[name="first_name"]')?.value?.trim();
     const lastName = form.querySelector('[name="last_name"]')?.value?.trim();
 
     if (!medicalRecordNumber) {
-      alert("El número de expediente (MRN) es obligatorio.");
-      return;
+      medicalRecordNumber = await getNextMedicalRecordNumber();
+      const mrnField = form.querySelector('[name="medical_record_number"]');
+      if (mrnField) mrnField.value = medicalRecordNumber;
     }
 
     if (!firstName || !lastName) {
@@ -220,6 +288,7 @@ export async function handlePatientSubmit(event) {
 
     const payload = {
       medical_record_number: medicalRecordNumber,
+      dui: dui || null,
       first_name: firstName,
       last_name: lastName,
       birth_date: form.querySelector('[name="birth_date"]')?.value || null,
@@ -235,10 +304,12 @@ export async function handlePatientSubmit(event) {
     } else {
       const created = await createPatient(payload);
       patientId = created.id;
+      form.dataset.patientId = patientId;
     }
 
     await savePrimaryContact(patientId, form.querySelector('[name="phone"]')?.value || "");
     await savePrimaryAddress(patientId, form.querySelector('[name="address"]')?.value || "");
+    await upsertPatientVitals(patientId, getVitalsPayload(form));
 
     alert("Paciente guardado correctamente.");
     window.location.hash = "#/pacientes";

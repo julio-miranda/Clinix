@@ -1,7 +1,6 @@
 // js/controllers/encounterController.js
-
 import { getSessionUser } from "./authController.js";
-import { getPatients } from "../models/patientModel.js";
+import { getPatients, getPatientVitals } from "../models/patientModel.js";
 import { getConsultationDetail } from "../models/consultationDetailModel.js";
 
 import {
@@ -13,9 +12,96 @@ import {
 
 let editingEncounterId = null;
 
-/* =========================================
-   INICIALIZAR VISTA
-========================================= */
+function normalizeForCode(value) {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, "");
+}
+
+function generateDiagnosisCode(sourceText = "") {
+  const base = normalizeForCode(sourceText).slice(0, 6) || "DX";
+  const suffix = Math.random().toString(36).slice(2, 5).toUpperCase();
+  return `DX-${base}-${suffix}`.slice(0, 20);
+}
+
+function setValue(name, value) {
+  const el = document.querySelector(`[name='${name}']`);
+  if (el) el.value = value ?? "";
+}
+
+function setChecked(name, checked) {
+  const el = document.querySelector(`[name='${name}']`);
+  if (el) el.checked = !!checked;
+}
+
+function setSubmitButtonLabel(label) {
+  const btn = document.querySelector("#encounterForm button[type='submit']");
+  if (btn) btn.textContent = label;
+}
+
+function toLocalDateTime(value) {
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return "";
+  const offset = d.getTimezoneOffset() * 60000;
+  return new Date(d.getTime() - offset).toISOString().slice(0, 16);
+}
+
+function getFirstItem(value, predicate = null) {
+  if (Array.isArray(value)) {
+    if (typeof predicate === "function") {
+      return value.find(predicate) || null;
+    }
+    return value[0] || null;
+  }
+
+  if (value && typeof value === "object") {
+    if (typeof predicate === "function") {
+      return predicate(value) ? value : null;
+    }
+    return value;
+  }
+
+  return null;
+}
+
+function readDatasetArray(value) {
+  try {
+    const parsed = JSON.parse(value || "[]");
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function applyVitalsToForm(vitals) {
+  setValue("weight_kg", vitals?.weight_kg ?? "");
+  setValue("height_cm", vitals?.height_cm ?? "");
+  setValue("temperature_c", vitals?.temperature_c ?? "");
+  setValue("systolic_bp", vitals?.systolic_bp ?? "");
+  setValue("diastolic_bp", vitals?.diastolic_bp ?? "");
+  setValue("pulse_rate", vitals?.pulse_rate ?? "");
+  setValue("respiratory_rate", vitals?.respiratory_rate ?? "");
+}
+
+function bindDiagnosisAutogeneration() {
+  const diagnosisField = document.querySelector("[name='primary_diagnosis']");
+  const codeField = document.querySelector("[name='diagnosis_code']");
+
+  if (!diagnosisField || !codeField) return;
+
+  const syncCode = () => {
+    if (editingEncounterId && String(codeField.value || "").trim()) {
+      return;
+    }
+
+    codeField.value = generateDiagnosisCode(diagnosisField.value);
+  };
+
+  diagnosisField.addEventListener("input", syncCode);
+  syncCode();
+}
 
 export async function initEncounterView(params = new URLSearchParams()) {
   const user = getSessionUser();
@@ -39,6 +125,8 @@ export async function initEncounterView(params = new URLSearchParams()) {
       form.addEventListener("submit", handleEncounterSubmit);
     }
 
+    bindDiagnosisAutogeneration();
+
     if (encounterId) {
       await loadEncounterForEdit(encounterId);
     } else {
@@ -49,16 +137,13 @@ export async function initEncounterView(params = new URLSearchParams()) {
       setValue("payment_method", "");
       setChecked("issue_ticket", false);
       setChecked("charge_now", false);
+      setValue("diagnosis_code", "");
     }
   } catch (error) {
     console.error("Error inicializando consulta:", error);
     alert("No se pudo cargar la pantalla de consulta.");
   }
 }
-
-/* =========================================
-   CARGAR CONSULTA PARA EDICIÓN
-========================================= */
 
 async function loadEncounterForEdit(encounterId) {
   editingEncounterId = encounterId;
@@ -101,13 +186,16 @@ async function loadEncounterForEdit(encounterId) {
     setValue("notes", detail.notes || "");
 
     const vital = getFirstItem(detail.vital_signs);
-    setValue("weight_kg", vital?.weight_kg ?? "");
-    setValue("height_cm", vital?.height_cm ?? "");
-    setValue("temperature_c", vital?.temperature_c ?? "");
-    setValue("systolic_bp", vital?.systolic_bp ?? "");
-    setValue("diastolic_bp", vital?.diastolic_bp ?? "");
-    setValue("pulse_rate", vital?.pulse_rate ?? "");
-    setValue("respiratory_rate", vital?.respiratory_rate ?? "");
+    if (vital) {
+      applyVitalsToForm(vital);
+    } else {
+      try {
+        const patientVitals = await getPatientVitals(patientId);
+        applyVitalsToForm(patientVitals);
+      } catch (error) {
+        console.error("No se pudieron cargar signos vitales del paciente:", error);
+      }
+    }
 
     const diagnosis = getFirstItem(detail.encounter_diagnoses, item => item?.is_primary);
     const planItems = Array.isArray(detail.encounter_plan_items) ? detail.encounter_plan_items : [];
@@ -115,6 +203,7 @@ async function loadEncounterForEdit(encounterId) {
 
     setValue("diagnosis_code", diagnosis?.diagnosis_catalog?.code || "");
     setValue("primary_diagnosis", diagnosis?.diagnosis_catalog?.description || "");
+
     setValue(
       "plan_items",
       planItems
@@ -152,10 +241,6 @@ async function loadEncounterForEdit(encounterId) {
   }
 }
 
-/* =========================================
-   BLOQUEAR CONSULTA CERRADA
-========================================= */
-
 function lockClosedForm(form) {
   const warning = document.createElement("div");
   warning.className = "card";
@@ -170,50 +255,6 @@ function lockClosedForm(form) {
   form.querySelectorAll("input, textarea, select, button").forEach(el => {
     el.disabled = true;
   });
-}
-
-/* =========================================
-   UTILIDADES
-========================================= */
-
-function setValue(name, value) {
-  const el = document.querySelector(`[name='${name}']`);
-  if (el) el.value = value ?? "";
-}
-
-function setChecked(name, checked) {
-  const el = document.querySelector(`[name='${name}']`);
-  if (el) el.checked = !!checked;
-}
-
-function setSubmitButtonLabel(label) {
-  const btn = document.querySelector("#encounterForm button[type='submit']");
-  if (btn) btn.textContent = label;
-}
-
-function toLocalDateTime(value) {
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return "";
-  const offset = d.getTimezoneOffset() * 60000;
-  return new Date(d.getTime() - offset).toISOString().slice(0, 16);
-}
-
-function getFirstItem(value, predicate = null) {
-  if (Array.isArray(value)) {
-    if (typeof predicate === "function") {
-      return value.find(predicate) || null;
-    }
-    return value[0] || null;
-  }
-
-  if (value && typeof value === "object") {
-    if (typeof predicate === "function") {
-      return predicate(value) ? value : null;
-    }
-    return value;
-  }
-
-  return null;
 }
 
 async function loadPatientSelect(selectedId = "") {
@@ -253,6 +294,7 @@ async function handlePatientChange() {
   try {
     const antecedents = await getPatientAntecedents(patientId);
     const allergies = await getPatientAllergies(patientId);
+    const patientVitals = await getPatientVitals(patientId);
     const form = document.getElementById("encounterForm");
 
     const medicalField = document.querySelector("[name='medical_history']");
@@ -268,23 +310,12 @@ async function handlePatientChange() {
       form.dataset.originalSurgicalHistory = JSON.stringify(antecedents.surgicalLines || []);
       form.dataset.originalAllergies = JSON.stringify(allergies.lines || []);
     }
+
+    applyVitalsToForm(patientVitals);
   } catch (error) {
     console.error("Error cargando antecedentes:", error);
   }
 }
-
-function readDatasetArray(value) {
-  try {
-    const parsed = JSON.parse(value || "[]");
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
-}
-
-/* =========================================
-   GUARDAR CONSULTA
-========================================= */
 
 async function handleEncounterSubmit(event) {
   event.preventDefault();
@@ -308,6 +339,12 @@ async function handleEncounterSubmit(event) {
     if (!patientId) {
       alert("Seleccione un paciente.");
       return;
+    }
+
+    const diagnosisText = form.primary_diagnosis.value.trim();
+    const diagnosisCodeField = form.querySelector("[name='diagnosis_code']");
+    if (diagnosisCodeField && !String(diagnosisCodeField.value || "").trim()) {
+      diagnosisCodeField.value = generateDiagnosisCode(diagnosisText);
     }
 
     const vitalSigns = {
@@ -339,7 +376,7 @@ async function handleEncounterSubmit(event) {
       existingAllergies: readDatasetArray(form.dataset.originalAllergies),
       vitalSigns,
       diagnosisCode: form.diagnosis_code.value.trim(),
-      primaryDiagnosis: form.primary_diagnosis.value.trim(),
+      primaryDiagnosis: diagnosisText,
       diagnosisNotes: null,
       planItems: form.plan_items.value.trim(),
       nextAppointment,

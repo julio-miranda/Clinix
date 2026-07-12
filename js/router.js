@@ -16,6 +16,7 @@ import { initReportsView } from "./controllers/reportController.js";
 import { initCatalogosView } from "./controllers/catalogController.js";
 import { initReportDetailView } from "./controllers/reportDetailController.js";
 import { initUsersView } from "./controllers/usersController.js";
+import { initProfileView } from "./controllers/profileController.js";
 
 let navigationToken = 0;
 
@@ -29,6 +30,11 @@ const routes = {
     view: "./views/dashboard.html",
     roles: ["admin", "medico", "recepcion"],
     init: initDashboardView
+  },
+  "#/perfil": {
+    view: "./views/perfil.html",
+    roles: ["admin", "medico", "recepcion"],
+    init: initProfileView
   },
   "#/pacientes": {
     view: "./views/pacientes.html",
@@ -113,8 +119,6 @@ async function loadView(viewPath, token) {
     throw new Error("No existe el contenedor #app en el DOM.");
   }
 
-  console.log("[router] Cargando vista:", viewPath);
-
   const response = await fetch(viewPath, { cache: "no-store" });
   if (!response.ok) {
     throw new Error(`No se pudo cargar la vista: ${viewPath}`);
@@ -123,7 +127,6 @@ async function loadView(viewPath, token) {
   if (token !== navigationToken) return false;
 
   const html = await response.text();
-
   if (token !== navigationToken) return false;
 
   app.innerHTML = html;
@@ -147,18 +150,10 @@ export async function router() {
   try {
     const { hashPath, queryString, route } = getCurrentRoute();
 
-    console.log("[router] Ruta actual:", hashPath);
-    console.log("[router] Ruta pública:", !!route.public);
-    console.log("[router] Roles permitidos:", route.roles || "sin restricción");
-
     const user = getSessionUser();
-    console.log("[router] Usuario en sessionStorage:", user);
 
     if (!route.public) {
-      console.log("[router] Verificando autenticación...");
       const authorized = await requireAuth();
-      console.log("[router] requireAuth() =>", authorized);
-
       if (!authorized || token !== navigationToken) return;
     }
 
@@ -166,7 +161,6 @@ export async function router() {
 
     if (route.roles && route.roles.length && user) {
       if (!route.roles.includes(currentRole)) {
-        console.warn("[router] Acceso denegado. Rol actual:", currentRole);
         alert("No tienes permisos para acceder aquí.");
         redirectByRole(currentRole);
         return;
@@ -179,7 +173,6 @@ export async function router() {
     const params = new URLSearchParams(queryString);
 
     if (typeof route.init === "function") {
-      console.log("[router] Ejecutando init de la vista...");
       await route.init(params);
     }
 

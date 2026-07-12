@@ -1,7 +1,7 @@
+<!-- encounter-form.html -->
 <section class="page">
 
   <div class="detail-header">
-
     <div>
       <h1>Consulta médica</h1>
       <p>
@@ -16,14 +16,9 @@
         ← Volver
       </a>
     </div>
-
   </div>
 
   <form id="encounterForm" class="card" enctype="multipart/form-data">
-
-    <!-- ===========================
-         DATOS GENERALES
-    ============================ -->
 
     <div class="form-section">
       <h2>Datos generales</h2>
@@ -43,10 +38,6 @@
       <textarea name="physical_exam" id="physical_exam"></textarea>
     </div>
 
-    <!-- ===========================
-         ANTECEDENTES
-    ============================ -->
-
     <div class="form-section">
       <h2>Antecedentes</h2>
 
@@ -62,10 +53,6 @@
       <textarea name="allergies" id="allergies"
         placeholder="Se llenará automáticamente al seleccionar el paciente."></textarea>
     </div>
-
-    <!-- ===========================
-         SIGNOS VITALES
-    ============================ -->
 
     <div class="form-section">
       <h2>Signos vitales</h2>
@@ -108,15 +95,12 @@
       </div>
     </div>
 
-    <!-- ===========================
-         DIAGNÓSTICO
-    ============================ -->
-
     <div class="form-section">
       <h2>Diagnóstico y plan</h2>
 
       <label for="diagnosis_code">Código diagnóstico</label>
-      <input type="text" name="diagnosis_code" id="diagnosis_code" placeholder="Ej: J00" />
+      <input type="text" name="diagnosis_code" id="diagnosis_code" placeholder="Se autogenera" readonly />
+      <small>El código se genera automáticamente a partir del diagnóstico principal.</small>
 
       <label for="primary_diagnosis">Diagnóstico principal</label>
       <textarea name="primary_diagnosis" id="primary_diagnosis"></textarea>
@@ -125,20 +109,12 @@
       <textarea name="plan_items" id="plan_items" placeholder="Una indicación por línea"></textarea>
     </div>
 
-    <!-- ===========================
-         NOTAS
-    ============================ -->
-
     <div class="form-section">
       <h2>Notas</h2>
 
       <label for="notes">Notas clínicas</label>
       <textarea name="notes" id="notes" placeholder="Observaciones adicionales"></textarea>
     </div>
-
-    <!-- ===========================
-         CITA
-    ============================ -->
 
     <div class="form-section">
       <h2>Próxima cita</h2>
@@ -149,10 +125,6 @@
       <label for="appointment_reason">Motivo</label>
       <input type="text" name="appointment_reason" id="appointment_reason" />
     </div>
-
-    <!-- ===========================
-         TICKET / COBRO
-    ============================ -->
 
     <div class="form-section">
       <h2>Ticket y cobro</h2>
@@ -182,10 +154,6 @@
       </select>
     </div>
 
-    <!-- ===========================
-         ADJUNTOS / DOCUMENTOS
-    ============================ -->
-
     <div class="form-section">
       <h2>Adjuntos / Documentos</h2>
 
@@ -205,10 +173,6 @@
       </small>
     </div>
 
-    <!-- ===========================
-         BOTONES
-    ============================ -->
-
     <div class="form-actions">
       <a href="#/dashboard" class="btn-secondary"
         style="text-decoration:none; display:inline-flex; align-items:center; justify-content:center;">
@@ -221,5 +185,4 @@
     </div>
 
   </form>
-
 </section>

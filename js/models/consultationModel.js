@@ -5,10 +5,13 @@ import { createAuditLog } from "./auditModel.js";
 import { issueConsultationTicket } from "./consultationTicketModel.js";
 
 async function getCatalogId(tableName, code) {
+  const cleanCode = String(code || "").trim();
+  if (!cleanCode) return null;
+
   const { data, error } = await supabase
     .from(tableName)
     .select("id")
-    .eq("code", code)
+    .eq("code", cleanCode)
     .single();
 
   if (error) throw error;
@@ -47,6 +50,21 @@ function getNewLines(currentLines, existingLines) {
   const existingSet = new Set((existingLines || []).map(normalizeLine));
   const uniqueCurrent = uniqueLines(currentLines);
   return uniqueCurrent.filter(line => !existingSet.has(normalizeLine(line)));
+}
+
+function normalizeDiagnosisCode(value) {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, "")
+    .trim();
+}
+
+function buildFallbackDiagnosisCode(description) {
+  const base = normalizeDiagnosisCode(description).slice(0, 6) || "DX";
+  const suffix = Math.random().toString(36).slice(2, 5).toUpperCase();
+  return `DX-${base}-${suffix}`.slice(0, 20);
 }
 
 export async function getPatientAntecedents(patientId) {
@@ -109,7 +127,7 @@ async function createHistoryItem(patientId, typeCode, description, recordedBy) {
   const cleanDescription = String(description || "").trim();
   if (!cleanDescription) return null;
 
-  const { data: existing } = await supabase
+  const { data: existing, error: findError } = await supabase
     .from("patient_history_items")
     .select("id")
     .eq("patient_id", patientId)
@@ -117,6 +135,7 @@ async function createHistoryItem(patientId, typeCode, description, recordedBy) {
     .eq("description", cleanDescription)
     .maybeSingle();
 
+  if (findError) throw findError;
   if (existing) return existing;
 
   const { data, error } = await supabase
@@ -138,13 +157,14 @@ async function createAllergyItem(patientId, allergen, notedBy) {
   const cleanAllergen = String(allergen || "").trim();
   if (!cleanAllergen) return null;
 
-  const { data: existing } = await supabase
+  const { data: existing, error: findError } = await supabase
     .from("patient_allergies")
     .select("id")
     .eq("patient_id", patientId)
     .eq("allergen", cleanAllergen)
     .maybeSingle();
 
+  if (findError) throw findError;
   if (existing) return existing;
 
   const { data, error } = await supabase
@@ -174,8 +194,8 @@ async function ensureDiagnosisCatalogEntry({ code, description }) {
     throw new Error("El diagnóstico principal es obligatorio.");
   }
 
-  const cleanCode = String(code || "").trim().toUpperCase();
-  const finalCode = cleanCode || `TX-${Date.now().toString().slice(-10)}`.slice(0, 20);
+  const cleanCode = normalizeDiagnosisCode(code);
+  const finalCode = cleanCode || buildFallbackDiagnosisCode(cleanDescription);
 
   const { data: existing, error: findError } = await supabase
     .from("diagnosis_catalog")
@@ -431,7 +451,13 @@ export async function updateConsultationBundle({
     const { error } = await supabase
       .from("vital_signs")
       .update({
-        ...vitalSigns,
+        weight_kg: vitalSigns?.weight_kg ?? null,
+        height_cm: vitalSigns?.height_cm ?? null,
+        temperature_c: vitalSigns?.temperature_c ?? null,
+        systolic_bp: vitalSigns?.systolic_bp ?? null,
+        diastolic_bp: vitalSigns?.diastolic_bp ?? null,
+        pulse_rate: vitalSigns?.pulse_rate ?? null,
+        respiratory_rate: vitalSigns?.respiratory_rate ?? null,
         recorded_by: userId
       })
       .eq("id", existingVital.id);
