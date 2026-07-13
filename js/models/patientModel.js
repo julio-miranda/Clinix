@@ -1,6 +1,36 @@
 // js/models/patientModel.js
 import { supabase } from "../config/supabase.js";
 
+const CONTEXT_KEY = "app_context";
+
+function cleanId(value) {
+  const text = String(value ?? "").trim();
+  return text.length ? text : "";
+}
+
+function getAppContext() {
+  try {
+    const raw = sessionStorage.getItem(CONTEXT_KEY);
+    if (!raw) return { clinic_id: "", branch_id: "" };
+
+    const parsed = JSON.parse(raw);
+    return {
+      clinic_id: cleanId(parsed?.clinic_id),
+      branch_id: cleanId(parsed?.branch_id)
+    };
+  } catch {
+    return { clinic_id: "", branch_id: "" };
+  }
+}
+
+function requireAppContext() {
+  const ctx = getAppContext();
+  if (!ctx.clinic_id || !ctx.branch_id) {
+    throw new Error("Debe seleccionar clínica y sucursal.");
+  }
+  return ctx;
+}
+
 async function getCatalogId(tableName, code) {
   const { data, error } = await supabase
     .from(tableName)
@@ -34,10 +64,14 @@ function buildMedicalRecordNumber() {
 }
 
 async function medicalRecordNumberExists(mrn) {
+  const ctx = requireAppContext();
+
   const { data, error } = await supabase
     .from("patients")
     .select("id")
     .eq("medical_record_number", mrn)
+    .eq("clinic_id", ctx.clinic_id)
+    .eq("branch_id", ctx.branch_id)
     .maybeSingle();
 
   if (error) throw error;
@@ -65,6 +99,8 @@ export async function getSexes() {
 }
 
 export async function getPatients(search = "") {
+  const ctx = requireAppContext();
+
   let query = supabase
     .from("patients")
     .select(`
@@ -77,10 +113,14 @@ export async function getPatients(search = "") {
       sex_id,
       occupation,
       active,
+      clinic_id,
+      branch_id,
       created_at,
       updated_at,
       sex:sexes(code,name)
     `)
+    .eq("clinic_id", ctx.clinic_id)
+    .eq("branch_id", ctx.branch_id)
     .order("last_name", { ascending: true })
     .order("first_name", { ascending: true });
 
@@ -96,10 +136,14 @@ export async function getPatients(search = "") {
 }
 
 export async function getPatientById(id) {
+  const ctx = requireAppContext();
+
   const { data, error } = await supabase
     .from("patients")
-    .select("id, medical_record_number, dui, first_name, last_name, birth_date, sex_id, occupation, active, created_at, updated_at")
+    .select("id, medical_record_number, dui, first_name, last_name, birth_date, sex_id, occupation, active, clinic_id, branch_id, created_at, updated_at")
     .eq("id", id)
+    .eq("clinic_id", ctx.clinic_id)
+    .eq("branch_id", ctx.branch_id)
     .single();
 
   if (error) throw error;
@@ -131,6 +175,8 @@ export async function getPatientAddresses(patientId) {
 }
 
 export async function getPatientVitals(patientId) {
+  const ctx = requireAppContext();
+
   const { data, error } = await supabase
     .from("patient_vital_signs")
     .select(`
@@ -144,9 +190,13 @@ export async function getPatientVitals(patientId) {
       pulse_rate,
       respiratory_rate,
       recorded_at,
-      recorded_by
+      recorded_by,
+      clinic_id,
+      branch_id
     `)
     .eq("patient_id", patientId)
+    .eq("clinic_id", ctx.clinic_id)
+    .eq("branch_id", ctx.branch_id)
     .maybeSingle();
 
   if (error) throw error;
@@ -170,6 +220,7 @@ export async function getPatientFull(patientId) {
 }
 
 export async function createPatient(payload) {
+  const ctx = requireAppContext();
   const body = { ...payload };
 
   body.medical_record_number = normalizeText(body.medical_record_number);
@@ -178,6 +229,8 @@ export async function createPatient(payload) {
   }
 
   body.dui = normalizeDui(body.dui);
+  body.clinic_id = ctx.clinic_id;
+  body.branch_id = ctx.branch_id;
 
   const { data, error } = await supabase
     .from("patients")
@@ -190,6 +243,7 @@ export async function createPatient(payload) {
 }
 
 export async function updatePatient(id, payload) {
+  const ctx = requireAppContext();
   const body = { ...payload };
 
   if (Object.prototype.hasOwnProperty.call(body, "medical_record_number")) {
@@ -203,10 +257,15 @@ export async function updatePatient(id, payload) {
     body.dui = normalizeDui(body.dui);
   }
 
+  body.clinic_id = ctx.clinic_id;
+  body.branch_id = ctx.branch_id;
+
   const { data, error } = await supabase
     .from("patients")
     .update(body)
     .eq("id", id)
+    .eq("clinic_id", ctx.clinic_id)
+    .eq("branch_id", ctx.branch_id)
     .select()
     .single();
 
@@ -215,6 +274,8 @@ export async function updatePatient(id, payload) {
 }
 
 export async function upsertPatientVitals(patientId, payload, recordedBy = null) {
+  const ctx = requireAppContext();
+
   const body = {
     patient_id: patientId,
     weight_kg: payload.weight_kg ?? null,
@@ -224,13 +285,17 @@ export async function upsertPatientVitals(patientId, payload, recordedBy = null)
     diastolic_bp: payload.diastolic_bp ?? null,
     pulse_rate: payload.pulse_rate ?? null,
     respiratory_rate: payload.respiratory_rate ?? null,
-    recorded_by: recordedBy
+    recorded_by: recordedBy,
+    clinic_id: ctx.clinic_id,
+    branch_id: ctx.branch_id
   };
 
   const hasAny = Object.entries(body).some(
     ([key, value]) =>
       key !== "patient_id" &&
       key !== "recorded_by" &&
+      key !== "clinic_id" &&
+      key !== "branch_id" &&
       value !== null &&
       value !== undefined &&
       value !== ""

@@ -113,6 +113,8 @@ function buildAdminUsersPayload(payload) {
     active: payload?.active !== false,
     role,
     role_codes: roleCodes.length ? roleCodes : [role.toLowerCase()],
+    clinic_id: normalizeText(payload?.clinic_id),
+    branch_id: normalizeText(payload?.branch_id)
   };
 }
 
@@ -196,7 +198,18 @@ export const UsersModel = {
 
     let query = supabase
       .from("app_users")
-      .select("id, email, full_name, active, created_at, updated_at")
+      .select(`
+        id,
+        email,
+        full_name,
+        active,
+        created_at,
+        updated_at,
+        clinic_id,
+        branch_id,
+        clinic:clinics(id, name),
+        branch:branches(id, name)
+      `)
       .order("created_at", { ascending: false });
 
     if (term) {
@@ -214,7 +227,18 @@ export const UsersModel = {
 
     const { data, error } = await supabase
       .from("app_users")
-      .select("id, email, full_name, active, created_at, updated_at")
+      .select(`
+        id,
+        email,
+        full_name,
+        active,
+        created_at,
+        updated_at,
+        clinic_id,
+        branch_id,
+        clinic:clinics(id, name),
+        branch:branches(id, name)
+      `)
       .eq("id", id)
       .single();
 
@@ -245,6 +269,8 @@ export const UsersModel = {
     if (action !== "delete") {
       if (!payload?.email) throw new Error("El correo es obligatorio.");
       if (!payload?.full_name) throw new Error("El nombre completo es obligatorio.");
+      if (!payload?.clinic_id) throw new Error("Debe seleccionar una clínica.");
+      if (!payload?.branch_id) throw new Error("Debe seleccionar una sucursal.");
     }
 
     const body = buildAdminUsersPayload(payload);

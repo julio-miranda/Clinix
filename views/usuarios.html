@@ -1,3 +1,4 @@
+<!-- views/usuarios.html -->
 <section class="page">
     <div class="detail-header">
         <h1>Gestión de Usuarios</h1>
@@ -40,6 +41,8 @@
                             <tr>
                                 <th>Nombre completo</th>
                                 <th>Correo</th>
+                                <th>Clínica</th>
+                                <th>Sucursal</th>
                                 <th>Roles</th>
                                 <th>Estado</th>
                                 <th>Creado</th>
@@ -49,7 +52,7 @@
                         </thead>
                         <tbody id="usuariosTableBody">
                             <tr>
-                                <td colspan="7" style="text-align: center; padding: 20px;">
+                                <td colspan="9" style="text-align: center; padding: 20px;">
                                     Cargando usuarios...
                                 </td>
                             </tr>
@@ -87,6 +90,18 @@
                 <div>
                     <label for="usuarioConfirmPassword">Confirmar contraseña</label>
                     <input type="password" id="usuarioConfirmPassword" placeholder="Repita la contraseña" />
+                </div>
+            </div>
+
+            <div class="form-grid">
+                <div>
+                    <label for="usuarioClinicId">Clínica</label>
+                    <select id="usuarioClinicId" required></select>
+                </div>
+
+                <div>
+                    <label for="usuarioBranchId">Sucursal</label>
+                    <select id="usuarioBranchId" required></select>
                 </div>
             </div>
 

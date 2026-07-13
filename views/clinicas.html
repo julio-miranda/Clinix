@@ -1,0 +1,112 @@
+<!-- views/clinicas.html -->
+<section class="page">
+    <div class="detail-header">
+        <div>
+            <h1>Gestión de clínicas y sucursales</h1>
+            <p>Administración exclusiva para usuarios administradores.</p>
+        </div>
+        <div class="toolbar">
+            <a href="#/dashboard" class="btn-secondary"
+                style="text-decoration:none; display:inline-flex; align-items:center; justify-content:center;"> ← Volver
+            </a>
+        </div>
+    </div>
+    <div id="clinicsAlert" style="margin-bottom: 16px;"></div>
+    <div class="catalog-layout">
+        <aside class="card">
+            <h2>Filtros</h2>
+            <div class="catalog-menu-list">
+                <label for="clinicSearch">Buscar clínica</label>
+                <input type="text" id="clinicSearch" placeholder="Buscar por nombre..." />
+                <button type="button" id="btnSearchClinic" class="btn-primary catalog-menu-btn"> Buscar </button>
+                <button type="button" id="btnClearClinicSearch" class="btn-secondary catalog-menu-btn"> Limpiar
+                </button>
+                <button type="button" id="btnNewClinic" class="btn-primary catalog-menu-btn"> Nueva clínica </button>
+                <hr />
+                <label for="branchClinicFilter">Ver sucursales de</label>
+                <select id="branchClinicFilter"></select>
+                <button type="button" id="btnNewBranch" class="btn-primary catalog-menu-btn"> Nueva sucursal </button>
+            </div>
+        </aside>
+        <main class="card">
+            <div class="form-section">
+                <h2>Clínicas</h2>
+                <div class="table-container">
+                    <table class="table-scroll">
+                        <thead>
+                            <tr>
+                                <th>Nombre</th>
+                                <th>Estado</th>
+                                <th>Creada</th>
+                                <th>Actualizada</th>
+                                <th>Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody id="clinicsTableBody">
+                            <tr>
+                                <td colspan="5" style="text-align:center; padding:20px;">Cargando clínicas...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="form-section" style="margin-top: 18px;">
+                <h2>Sucursales</h2>
+                <div class="table-container">
+                    <table class="table-scroll">
+                        <thead>
+                            <tr>
+                                <th>Clínica</th>
+                                <th>Sucursal</th>
+                                <th>Estado</th>
+                                <th>Creada</th>
+                                <th>Actualizada</th>
+                                <th>Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody id="branchesTableBody">
+                            <tr>
+                                <td colspan="6" style="text-align:center; padding:20px;">Cargando sucursales...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </main>
+    </div>
+    <div class="catalog-layout" style="margin-top: 18px;">
+        <section class="card">
+            <h2 id="clinicFormTitle">Formulario de clínica</h2>
+            <form id="clinicForm">
+                <input type="hidden" id="clinicId" />
+                <label for="clinicName">Nombre</label>
+                <input type="text" id="clinicName" placeholder="Nombre de la clínica" required />
+                <label class="checkbox-group" style="margin-top: 12px;">
+                    <input type="checkbox" id="clinicActive" checked />
+                    <span>Activa</span>
+                </label>
+                <div class="form-actions">
+                    <button type="button" id="btnCancelClinic" class="btn-secondary">Cancelar</button>
+                    <button type="submit" class="btn-primary">Guardar clínica</button>
+                </div>
+            </form>
+        </section>
+        <section class="card">
+            <h2 id="branchFormTitle">Formulario de sucursal</h2>
+            <form id="branchForm">
+                <input type="hidden" id="branchId" />
+                <label for="branchClinicId">Clínica</label>
+                <select id="branchClinicId" required></select>
+                <label for="branchName">Nombre</label>
+                <input type="text" id="branchName" placeholder="Nombre de la sucursal" required />
+                <label class="checkbox-group" style="margin-top: 12px;">
+                    <input type="checkbox" id="branchActive" checked />
+                    <span>Activa</span> </label>
+                <div class="form-actions">
+                    <button type="button" id="btnCancelBranch" class="btn-secondary">Cancelar</button>
+                    <button type="submit" class="btn-primary">Guardar sucursal</button>
+                </div>
+            </form>
+        </section>
+    </div>
+</section>

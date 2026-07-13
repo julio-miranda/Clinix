@@ -1,8 +1,38 @@
 // js/models/consultationModel.js
 import { supabase } from "../config/supabase.js";
-import { createEncounter, createVitalSigns } from "./encounterModel.js";
+import { createVitalSigns } from "./encounterModel.js";
 import { createAuditLog } from "./auditModel.js";
 import { issueConsultationTicket } from "./consultationTicketModel.js";
+
+const CONTEXT_KEY = "app_context";
+
+function cleanId(value) {
+  const text = String(value ?? "").trim();
+  return text.length ? text : "";
+}
+
+function getAppContext() {
+  try {
+    const raw = sessionStorage.getItem(CONTEXT_KEY);
+    if (!raw) return { clinic_id: "", branch_id: "" };
+
+    const parsed = JSON.parse(raw);
+    return {
+      clinic_id: cleanId(parsed?.clinic_id),
+      branch_id: cleanId(parsed?.branch_id)
+    };
+  } catch {
+    return { clinic_id: "", branch_id: "" };
+  }
+}
+
+function requireAppContext() {
+  const ctx = getAppContext();
+  if (!ctx.clinic_id || !ctx.branch_id) {
+    throw new Error("Debe seleccionar clínica y sucursal.");
+  }
+  return ctx;
+}
 
 async function getCatalogId(tableName, code) {
   const cleanCode = String(code || "").trim();
@@ -67,7 +97,64 @@ function buildFallbackDiagnosisCode(description) {
   return `DX-${base}-${suffix}`.slice(0, 20);
 }
 
+async function assertPatientInContext(patientId, context) {
+  const { data, error } = await supabase
+    .from("patients")
+    .select("id")
+    .eq("id", patientId)
+    .eq("clinic_id", context.clinic_id)
+    .eq("branch_id", context.branch_id)
+    .maybeSingle();
+
+  if (error) throw error;
+  if (!data?.id) {
+    throw new Error("El paciente no pertenece a la clínica o sucursal seleccionada.");
+  }
+}
+
+async function createEncounterWithContext({
+  patientId,
+  userId,
+  chiefComplaint,
+  presentIllness,
+  physicalExam,
+  notes = null
+}, context) {
+  await assertPatientInContext(patientId, context);
+
+  const statusId = await getCatalogId("encounter_statuses", "OPEN");
+  if (!statusId) {
+    throw new Error("No existe el catálogo OPEN en encounter_statuses.");
+  }
+
+  const body = {
+    patient_id: patientId,
+    created_by_user_id: userId,
+    attended_by_user_id: userId,
+    encounter_status_id: statusId,
+    encounter_at: new Date().toISOString(),
+    chief_complaint: chiefComplaint || null,
+    present_illness: presentIllness || null,
+    physical_exam: physicalExam || null,
+    notes: notes || null,
+    clinic_id: context.clinic_id,
+    branch_id: context.branch_id
+  };
+
+  const { data, error } = await supabase
+    .from("encounters")
+    .insert(body)
+    .select("id")
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
 export async function getPatientAntecedents(patientId) {
+  const context = requireAppContext();
+  await assertPatientInContext(patientId, context);
+
   const { data, error } = await supabase
     .from("patient_history_items")
     .select(`
@@ -102,6 +189,9 @@ export async function getPatientAntecedents(patientId) {
 }
 
 export async function getPatientAllergies(patientId) {
+  const context = requireAppContext();
+  await assertPatientInContext(patientId, context);
+
   const { data, error } = await supabase
     .from("patient_allergies")
     .select("allergen")
@@ -120,7 +210,9 @@ export async function getPatientAllergies(patientId) {
   };
 }
 
-async function createHistoryItem(patientId, typeCode, description, recordedBy) {
+async function createHistoryItem(patientId, typeCode, description, recordedBy, context) {
+  await assertPatientInContext(patientId, context);
+
   const typeId = await getCatalogId("patient_history_types", typeCode);
   if (!typeId) return null;
 
@@ -153,7 +245,9 @@ async function createHistoryItem(patientId, typeCode, description, recordedBy) {
   return data;
 }
 
-async function createAllergyItem(patientId, allergen, notedBy) {
+async function createAllergyItem(patientId, allergen, notedBy, context) {
+  await assertPatientInContext(patientId, context);
+
   const cleanAllergen = String(allergen || "").trim();
   if (!cleanAllergen) return null;
 
@@ -221,7 +315,7 @@ async function ensureDiagnosisCatalogEntry({ code, description }) {
   return data.id;
 }
 
-async function createDiagnosisItem(encounterId, { code, description, notes }, createdBy) {
+async function createDiagnosisItem(encounterId, { code, description, notes }, createdBy, context) {
   const diagnosisId = await ensureDiagnosisCatalogEntry({ code, description });
 
   const { data, error } = await supabase
@@ -231,7 +325,9 @@ async function createDiagnosisItem(encounterId, { code, description, notes }, cr
       diagnosis_id: diagnosisId,
       is_primary: true,
       notes: notes || null,
-      created_by: createdBy
+      created_by: createdBy,
+      clinic_id: context.clinic_id,
+      branch_id: context.branch_id
     })
     .select()
     .single();
@@ -240,7 +336,7 @@ async function createDiagnosisItem(encounterId, { code, description, notes }, cr
   return data;
 }
 
-async function createPlanItem(encounterId, description, createdBy, sortOrder = 1) {
+async function createPlanItem(encounterId, description, createdBy, sortOrder = 1, context) {
   const typeId = await getCatalogId("plan_item_types", "ADVICE");
   if (!typeId) {
     throw new Error("No existe el catálogo ADVICE en plan_item_types.");
@@ -256,7 +352,9 @@ async function createPlanItem(encounterId, description, createdBy, sortOrder = 1
       plan_item_type_id: typeId,
       description: cleanDescription,
       sort_order: sortOrder,
-      created_by: createdBy
+      created_by: createdBy,
+      clinic_id: context.clinic_id,
+      branch_id: context.branch_id
     })
     .select()
     .single();
@@ -265,7 +363,7 @@ async function createPlanItem(encounterId, description, createdBy, sortOrder = 1
   return data;
 }
 
-async function createAppointmentItem(patientId, encounterId, scheduledAt, reason, createdByUserId) {
+async function createAppointmentItem(patientId, encounterId, scheduledAt, reason, createdByUserId, context) {
   const statusId = await getCatalogId("appointment_statuses", "SCHEDULED");
   if (!statusId) {
     throw new Error("No existe el catálogo SCHEDULED en appointment_statuses.");
@@ -279,7 +377,9 @@ async function createAppointmentItem(patientId, encounterId, scheduledAt, reason
       appointment_status_id: statusId,
       scheduled_at: scheduledAt,
       reason: reason || null,
-      created_by_user_id: createdByUserId
+      created_by_user_id: createdByUserId,
+      clinic_id: context.clinic_id,
+      branch_id: context.branch_id
     })
     .select()
     .single();
@@ -312,15 +412,16 @@ export async function saveConsultationBundle({
   ticketAmount = null,
   paymentMethod = null
 }) {
-  const encounter = await createEncounter({
-    patient_id: patientId,
-    created_by_user_id: userId,
-    attended_by_user_id: userId,
-    chief_complaint: chiefComplaint || null,
-    present_illness: presentIllness || null,
-    physical_exam: physicalExam || null,
+  const context = requireAppContext();
+
+  const encounter = await createEncounterWithContext({
+    patientId,
+    userId,
+    chiefComplaint,
+    presentIllness,
+    physicalExam,
     notes: null
-  });
+  }, context);
 
   const vital = await createVitalSigns(encounter.id, vitalSigns, userId);
 
@@ -329,15 +430,15 @@ export async function saveConsultationBundle({
   const allergiesToCreate = getNewLines(splitLines(allergies), existingAllergies);
 
   for (const item of medicalToCreate) {
-    await createHistoryItem(patientId, "MEDICAL", item, userId);
+    await createHistoryItem(patientId, "MEDICAL", item, userId, context);
   }
 
   for (const item of surgicalToCreate) {
-    await createHistoryItem(patientId, "SURGICAL", item, userId);
+    await createHistoryItem(patientId, "SURGICAL", item, userId, context);
   }
 
   for (const item of allergiesToCreate) {
-    await createAllergyItem(patientId, item, userId);
+    await createAllergyItem(patientId, item, userId, context);
   }
 
   if (String(primaryDiagnosis || "").trim()) {
@@ -348,13 +449,14 @@ export async function saveConsultationBundle({
         description: primaryDiagnosis,
         notes: diagnosisNotes || null
       },
-      userId
+      userId,
+      context
     );
   }
 
   const planList = uniqueLines(splitLines(planItems));
   for (let i = 0; i < planList.length; i++) {
-    await createPlanItem(encounter.id, planList[i], userId, i + 1);
+    await createPlanItem(encounter.id, planList[i], userId, i + 1, context);
   }
 
   if (nextAppointment) {
@@ -363,7 +465,8 @@ export async function saveConsultationBundle({
       encounter.id,
       nextAppointment,
       appointmentReason,
-      userId
+      userId,
+      context
     );
   }
 
@@ -375,7 +478,9 @@ export async function saveConsultationBundle({
       issuedBy: userId,
       amount: ticketAmount,
       paymentMethod,
-      payNow: chargeNow
+      payNow: chargeNow,
+      clinic_id: context.clinic_id,
+      branch_id: context.branch_id
     });
   }
 
@@ -389,8 +494,7 @@ export async function saveConsultationBundle({
       hasVitalSigns: !!vital,
       hasAppointment: !!nextAppointment,
       hasTicket: !!ticket
-    },
-    userId
+    }
   });
 
   return {
@@ -425,6 +529,8 @@ export async function updateConsultationBundle({
   ticketAmount = null,
   paymentMethod = null
 }) {
+  const context = requireAppContext();
+
   if (!encounterId) {
     throw new Error("encounterId es obligatorio para actualizar.");
   }
@@ -437,7 +543,9 @@ export async function updateConsultationBundle({
       physical_exam: physicalExam || null,
       updated_at: new Date().toISOString()
     })
-    .eq("id", encounterId);
+    .eq("id", encounterId)
+    .eq("clinic_id", context.clinic_id)
+    .eq("branch_id", context.branch_id);
 
   if (encounterError) throw encounterError;
 
@@ -472,15 +580,15 @@ export async function updateConsultationBundle({
   const allergiesToCreate = getNewLines(splitLines(allergies), existingAllergies);
 
   for (const item of medicalToCreate) {
-    await createHistoryItem(patientId, "MEDICAL", item, userId);
+    await createHistoryItem(patientId, "MEDICAL", item, userId, context);
   }
 
   for (const item of surgicalToCreate) {
-    await createHistoryItem(patientId, "SURGICAL", item, userId);
+    await createHistoryItem(patientId, "SURGICAL", item, userId, context);
   }
 
   for (const item of allergiesToCreate) {
-    await createAllergyItem(patientId, item, userId);
+    await createAllergyItem(patientId, item, userId, context);
   }
 
   if (String(primaryDiagnosis || "").trim()) {
@@ -494,6 +602,8 @@ export async function updateConsultationBundle({
       .select("id")
       .eq("encounter_id", encounterId)
       .eq("is_primary", true)
+      .eq("clinic_id", context.clinic_id)
+      .eq("branch_id", context.branch_id)
       .maybeSingle();
 
     if (existingDiag?.id) {
@@ -504,7 +614,9 @@ export async function updateConsultationBundle({
           notes: diagnosisNotes || null,
           created_by: userId
         })
-        .eq("id", existingDiag.id);
+        .eq("id", existingDiag.id)
+        .eq("clinic_id", context.clinic_id)
+        .eq("branch_id", context.branch_id);
 
       if (error) throw error;
     } else {
@@ -515,7 +627,8 @@ export async function updateConsultationBundle({
           description: primaryDiagnosis,
           notes: diagnosisNotes || null
         },
-        userId
+        userId,
+        context
       );
     }
   }
@@ -523,11 +636,13 @@ export async function updateConsultationBundle({
   await supabase
     .from("encounter_plan_items")
     .delete()
-    .eq("encounter_id", encounterId);
+    .eq("encounter_id", encounterId)
+    .eq("clinic_id", context.clinic_id)
+    .eq("branch_id", context.branch_id);
 
   const planList = uniqueLines(splitLines(planItems));
   for (let i = 0; i < planList.length; i++) {
-    await createPlanItem(encounterId, planList[i], userId, i + 1);
+    await createPlanItem(encounterId, planList[i], userId, i + 1, context);
   }
 
   if (nextAppointment) {
@@ -535,6 +650,8 @@ export async function updateConsultationBundle({
       .from("appointments")
       .select("id")
       .eq("encounter_id", encounterId)
+      .eq("clinic_id", context.clinic_id)
+      .eq("branch_id", context.branch_id)
       .maybeSingle();
 
     if (existingAppt?.id) {
@@ -544,7 +661,9 @@ export async function updateConsultationBundle({
           scheduled_at: nextAppointment,
           reason: appointmentReason || null
         })
-        .eq("id", existingAppt.id);
+        .eq("id", existingAppt.id)
+        .eq("clinic_id", context.clinic_id)
+        .eq("branch_id", context.branch_id);
 
       if (error) throw error;
     } else {
@@ -553,7 +672,8 @@ export async function updateConsultationBundle({
         encounterId,
         nextAppointment,
         appointmentReason,
-        userId
+        userId,
+        context
       );
     }
   }
@@ -564,6 +684,8 @@ export async function updateConsultationBundle({
       .from("consultation_tickets")
       .select("*")
       .eq("encounter_id", encounterId)
+      .eq("clinic_id", context.clinic_id)
+      .eq("branch_id", context.branch_id)
       .maybeSingle();
 
     if (existingTicket) {
@@ -575,7 +697,9 @@ export async function updateConsultationBundle({
         issuedBy: userId,
         amount: ticketAmount,
         paymentMethod,
-        payNow: chargeNow
+        payNow: chargeNow,
+        clinic_id: context.clinic_id,
+        branch_id: context.branch_id
       });
     }
   }
@@ -588,8 +712,7 @@ export async function updateConsultationBundle({
       patientId,
       updated: true,
       hasTicket: !!ticket
-    },
-    userId
+    }
   });
 
   return {

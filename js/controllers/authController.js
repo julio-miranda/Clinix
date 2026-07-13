@@ -6,7 +6,13 @@ import {
   getProfile
 } from "../models/authModel.js";
 
+import {
+  getClinics,
+  getBranches
+} from "../models/clinicModel.js";
+
 const SESSION_USER_KEY = "user";
+const CONTEXT_KEY = "app_context";
 const VALID_ROLES = new Set(["admin", "medico", "recepcion"]);
 
 const ROLE_LABELS = {
@@ -18,6 +24,40 @@ const ROLE_LABELS = {
 function normalizeRole(role) {
   const value = String(role || "").toLowerCase().trim();
   return VALID_ROLES.has(value) ? value : "";
+}
+
+function cleanId(value) {
+  const text = String(value ?? "").trim();
+  return text.length ? text : "";
+}
+
+function getAppContext() {
+  try {
+    const raw = sessionStorage.getItem(CONTEXT_KEY);
+    if (!raw) return { clinic_id: "", branch_id: "" };
+
+    const parsed = JSON.parse(raw);
+    return {
+      clinic_id: cleanId(parsed?.clinic_id),
+      branch_id: cleanId(parsed?.branch_id)
+    };
+  } catch {
+    return { clinic_id: "", branch_id: "" };
+  }
+}
+
+function setAppContext(context) {
+  const payload = {
+    clinic_id: cleanId(context?.clinic_id),
+    branch_id: cleanId(context?.branch_id)
+  };
+
+  sessionStorage.setItem(CONTEXT_KEY, JSON.stringify(payload));
+  return payload;
+}
+
+function clearAppContext() {
+  sessionStorage.removeItem(CONTEXT_KEY);
 }
 
 function buildSessionUser(authUser, profile) {
@@ -55,6 +95,7 @@ function saveSessionUser(user) {
 export function clearLocalAuthArtifacts() {
   try {
     sessionStorage.removeItem(SESSION_USER_KEY);
+    clearAppContext();
   } catch (err) {
     console.error("ERROR LIMPIANDO SESIÓN:", err);
   }
@@ -89,6 +130,63 @@ async function loadSessionUser() {
   saveSessionUser(sessionUser);
 
   return sessionUser;
+}
+
+function fillContextSelect(select, items, placeholder, selectedId = "") {
+  if (!select) return;
+
+  select.innerHTML = `<option value="">${placeholder}</option>`;
+
+  for (const item of items || []) {
+    const option = document.createElement("option");
+    option.value = item.id;
+    option.textContent = item.name || "";
+    if (String(selectedId) === String(item.id)) {
+      option.selected = true;
+    }
+    select.appendChild(option);
+  }
+}
+
+async function initDashboardContext() {
+  const clinicSelect = document.getElementById("clinicSelect");
+  const branchSelect = document.getElementById("branchSelect");
+  const btnApply = document.getElementById("btnApplyContext");
+
+  if (!clinicSelect || !branchSelect) return;
+
+  const ctx = getAppContext();
+
+  const clinics = await getClinics();
+  fillContextSelect(clinicSelect, clinics, "Seleccione clínica", ctx.clinic_id);
+
+  const loadBranches = async (clinicId, selectedBranchId = "") => {
+    const branches = await getBranches(clinicId);
+    fillContextSelect(branchSelect, branches, "Seleccione sucursal", selectedBranchId);
+  };
+
+  clinicSelect.addEventListener("change", async () => {
+    branchSelect.innerHTML = `<option value="">Cargando...</option>`;
+    await loadBranches(clinicSelect.value, "");
+  });
+
+  await loadBranches(ctx.clinic_id, ctx.branch_id);
+
+  if (btnApply) {
+    btnApply.addEventListener("click", () => {
+      const next = setAppContext({
+        clinic_id: clinicSelect.value,
+        branch_id: branchSelect.value
+      });
+
+      if (!next.clinic_id || !next.branch_id) {
+        alert("Seleccione clínica y sucursal.");
+        return;
+      }
+
+      window.location.hash = "#/dashboard";
+    });
+  }
 }
 
 export async function initLoginView() {
@@ -140,6 +238,8 @@ export async function initDashboardView() {
     logoutBtn.removeEventListener("click", handleLogout);
     logoutBtn.addEventListener("click", handleLogout);
   }
+
+  await initDashboardContext();
 }
 
 export async function handleLogin(event) {
@@ -251,10 +351,10 @@ export function redirectByRole(role) {
       window.location.hash = "#/dashboard";
       break;
     case "medico":
-      window.location.hash = "#/dashboard";
+      window.location.hash = "#/consulta";
       break;
     case "recepcion":
-      window.location.hash = "#/dashboard";
+      window.location.hash = "#/pacientes";
       break;
     default:
       window.location.hash = "#/login";

@@ -17,6 +17,28 @@ const STUDY_TYPE_BY_MIME = {
   "image/webp": "IMAGE"
 };
 
+const CONTEXT_KEY = "app_context";
+
+function cleanId(value) {
+  const text = String(value ?? "").trim();
+  return text.length ? text : "";
+}
+
+function getAppContext() {
+  try {
+    const raw = sessionStorage.getItem(CONTEXT_KEY);
+    if (!raw) return { clinic_id: "", branch_id: "" };
+
+    const parsed = JSON.parse(raw);
+    return {
+      clinic_id: cleanId(parsed?.clinic_id),
+      branch_id: cleanId(parsed?.branch_id)
+    };
+  } catch {
+    return { clinic_id: "", branch_id: "" };
+  }
+}
+
 async function getCatalogId(tableName, code) {
   const { data, error } = await supabase
     .from(tableName)
@@ -56,7 +78,9 @@ function validateAttachmentFile(file) {
 }
 
 export async function listEncounterAttachments(encounterId) {
-  const { data, error } = await supabase
+  const ctx = getAppContext();
+
+  let query = supabase
     .from("encounter_studies")
     .select(`
       id,
@@ -74,10 +98,25 @@ export async function listEncounterAttachments(encounterId) {
         id,
         code,
         name
+      ),
+      encounters!inner (
+        id,
+        clinic_id,
+        branch_id
       )
     `)
     .eq("encounter_id", encounterId)
     .order("uploaded_at", { ascending: false });
+
+  if (ctx.clinic_id) {
+    query = query.eq("encounters.clinic_id", ctx.clinic_id);
+  }
+
+  if (ctx.branch_id) {
+    query = query.eq("encounters.branch_id", ctx.branch_id);
+  }
+
+  const { data, error } = await query;
 
   if (error) throw error;
   return data ?? [];

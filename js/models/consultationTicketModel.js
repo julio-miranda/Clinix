@@ -1,113 +1,164 @@
+// js/models/consultationTicketModel.js
 import { supabase } from "../config/supabase.js";
 
+const CONTEXT_KEY = "app_context";
+
+function cleanId(value) {
+  const text = String(value ?? "").trim();
+  return text.length ? text : "";
+}
+
+function getAppContext() {
+  try {
+    const raw = sessionStorage.getItem(CONTEXT_KEY);
+    if (!raw) return { clinic_id: "", branch_id: "" };
+
+    const parsed = JSON.parse(raw);
+    return {
+      clinic_id: cleanId(parsed?.clinic_id),
+      branch_id: cleanId(parsed?.branch_id)
+    };
+  } catch {
+    return { clinic_id: "", branch_id: "" };
+  }
+}
+
+function requireAppContext() {
+  const ctx = getAppContext();
+  if (!ctx.clinic_id || !ctx.branch_id) {
+    throw new Error("Debe seleccionar clínica y sucursal.");
+  }
+  return ctx;
+}
+
 export async function getConsultationFee() {
-    const { data, error } = await supabase
-        .from("clinic_settings")
-        .select("setting_value")
-        .eq("setting_key", "consultation_fee")
-        .maybeSingle();
+  const ctx = requireAppContext();
 
-    if (error) throw error;
+  const { data, error } = await supabase
+    .from("clinic_settings")
+    .select("setting_value")
+    .eq("setting_key", "consultation_fee")
+    .eq("clinic_id", ctx.clinic_id)
+    .eq("branch_id", ctx.branch_id)
+    .maybeSingle();
 
-    const value = Number(data?.setting_value ?? 0);
-    return Number.isFinite(value) ? value : 0;
+  if (error) throw error;
+
+  const value = Number(data?.setting_value ?? 0);
+  return Number.isFinite(value) ? value : 0;
 }
 
 export async function getEncounterTicket(encounterId) {
-    const { data, error } = await supabase
-        .from("consultation_tickets")
-        .select("*")
-        .eq("encounter_id", encounterId)
-        .maybeSingle();
+  const ctx = requireAppContext();
 
-    if (error) throw error;
-    return data ?? null;
+  const { data, error } = await supabase
+    .from("consultation_tickets")
+    .select("*")
+    .eq("encounter_id", encounterId)
+    .eq("clinic_id", ctx.clinic_id)
+    .eq("branch_id", ctx.branch_id)
+    .maybeSingle();
+
+  if (error) throw error;
+  return data ?? null;
 }
 
 export async function issueConsultationTicket({
-    encounterId,
-    patientId,
-    issuedBy,
-    amount = null,
-    currency = "USD",
-    paymentMethod = null,
-    reference = null,
-    notes = null,
-    payNow = false
+  encounterId,
+  patientId,
+  issuedBy,
+  amount = null,
+  currency = "USD",
+  paymentMethod = null,
+  reference = null,
+  notes = null,
+  payNow = false
 }) {
-    if (!encounterId) throw new Error("encounterId es obligatorio.");
-    if (!patientId) throw new Error("patientId es obligatorio.");
-    if (!issuedBy) throw new Error("issuedBy es obligatorio.");
+  const ctx = requireAppContext();
 
-    const finalAmount = amount !== null ? Number(amount) : await getConsultationFee();
-    if (!Number.isFinite(finalAmount) || finalAmount < 0) {
-        throw new Error("El monto del ticket no es válido.");
-    }
+  if (!encounterId) throw new Error("encounterId es obligatorio.");
+  if (!patientId) throw new Error("patientId es obligatorio.");
+  if (!issuedBy) throw new Error("issuedBy es obligatorio.");
 
-    const { data: existing, error: existingError } = await supabase
-        .from("consultation_tickets")
-        .select("*")
-        .eq("encounter_id", encounterId)
-        .maybeSingle();
+  const finalAmount = amount !== null ? Number(amount) : await getConsultationFee();
+  if (!Number.isFinite(finalAmount) || finalAmount < 0) {
+    throw new Error("El monto del ticket no es válido.");
+  }
 
-    if (existingError) throw existingError;
-    if (existing) return existing;
+  const { data: existing, error: existingError } = await supabase
+    .from("consultation_tickets")
+    .select("*")
+    .eq("encounter_id", encounterId)
+    .eq("clinic_id", ctx.clinic_id)
+    .eq("branch_id", ctx.branch_id)
+    .maybeSingle();
 
-    const payload = {
-        encounter_id: encounterId,
-        patient_id: patientId,
-        issued_by: issuedBy,
-        amount: finalAmount,
-        currency,
-        payment_status: payNow ? "PAID" : "PENDING",
-        payment_method: paymentMethod,
-        reference,
-        notes,
-        paid_at: payNow ? new Date().toISOString() : null
-    };
+  if (existingError) throw existingError;
+  if (existing) return existing;
 
-    const { data, error } = await supabase
-        .from("consultation_tickets")
-        .insert(payload)
-        .select()
-        .single();
+  const payload = {
+    encounter_id: encounterId,
+    patient_id: patientId,
+    issued_by: issuedBy,
+    amount: finalAmount,
+    currency,
+    payment_status: payNow ? "PAID" : "PENDING",
+    payment_method: paymentMethod,
+    reference,
+    notes,
+    paid_at: payNow ? new Date().toISOString() : null,
+    clinic_id: ctx.clinic_id,
+    branch_id: ctx.branch_id
+  };
 
-    if (error) throw error;
-    return data;
+  const { data, error } = await supabase
+    .from("consultation_tickets")
+    .insert(payload)
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
 }
 
 export async function chargeConsultationTicket({
-    ticketId,
-    paymentMethod,
-    reference = null,
-    notes = null
+  ticketId,
+  paymentMethod,
+  reference = null,
+  notes = null
 }) {
-    if (!ticketId) throw new Error("ticketId es obligatorio.");
+  const ctx = requireAppContext();
 
-    const { data, error } = await supabase
-        .from("consultation_tickets")
-        .update({
-            payment_status: "PAID",
-            payment_method: paymentMethod || null,
-            reference,
-            notes,
-            paid_at: new Date().toISOString()
-        })
-        .eq("id", ticketId)
-        .select()
-        .single();
+  if (!ticketId) throw new Error("ticketId es obligatorio.");
 
-    if (error) throw error;
-    return data;
+  const { data, error } = await supabase
+    .from("consultation_tickets")
+    .update({
+      payment_status: "PAID",
+      payment_method: paymentMethod || null,
+      reference,
+      notes,
+      paid_at: new Date().toISOString(),
+      clinic_id: ctx.clinic_id,
+      branch_id: ctx.branch_id
+    })
+    .eq("id", ticketId)
+    .eq("clinic_id", ctx.clinic_id)
+    .eq("branch_id", ctx.branch_id)
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
 }
 
 export function buildTicketPrintHtml(ticket, patient, encounter) {
-    const fullName = `${patient?.first_name || ""} ${patient?.last_name || ""}`.trim();
-    const amount = Number(ticket?.amount || 0).toFixed(2);
-    const status = ticket?.payment_status || "PENDING";
-    const date = ticket?.issued_at ? new Date(ticket.issued_at).toLocaleString() : "";
+  const fullName = `${patient?.first_name || ""} ${patient?.last_name || ""}`.trim();
+  const amount = Number(ticket?.amount || 0).toFixed(2);
+  const status = ticket?.payment_status || "PENDING";
+  const date = ticket?.issued_at ? new Date(ticket.issued_at).toLocaleString() : "";
 
-    return `
+  return `
 <!DOCTYPE html>
 <html lang="es">
 <head>

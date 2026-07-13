@@ -1,5 +1,35 @@
-//js/models/encounterModel.js
+// js/models/encounterModel.js
 import { supabase } from "../config/supabase.js";
+
+const CONTEXT_KEY = "app_context";
+
+function cleanId(value) {
+  const text = String(value ?? "").trim();
+  return text.length ? text : "";
+}
+
+function getAppContext() {
+  try {
+    const raw = sessionStorage.getItem(CONTEXT_KEY);
+    if (!raw) return { clinic_id: "", branch_id: "" };
+
+    const parsed = JSON.parse(raw);
+    return {
+      clinic_id: cleanId(parsed?.clinic_id),
+      branch_id: cleanId(parsed?.branch_id)
+    };
+  } catch {
+    return { clinic_id: "", branch_id: "" };
+  }
+}
+
+function requireAppContext() {
+  const ctx = getAppContext();
+  if (!ctx.clinic_id || !ctx.branch_id) {
+    throw new Error("Debe seleccionar clínica y sucursal.");
+  }
+  return ctx;
+}
 
 async function getCatalogId(tableName, code) {
   const { data, error } = await supabase
@@ -23,6 +53,8 @@ export async function getEncounterStatuses() {
 }
 
 export async function createEncounter(payload) {
+  const ctx = requireAppContext();
+
   const statusId =
     payload.encounter_status_id ||
     await getCatalogId("encounter_statuses", "OPEN");
@@ -37,7 +69,9 @@ export async function createEncounter(payload) {
     chief_complaint: payload.chief_complaint || null,
     present_illness: payload.present_illness || null,
     physical_exam: payload.physical_exam || null,
-    notes: payload.notes || null
+    notes: payload.notes || null,
+    clinic_id: ctx.clinic_id,
+    branch_id: ctx.branch_id
   };
 
   const { data, error } = await supabase
@@ -51,6 +85,8 @@ export async function createEncounter(payload) {
 }
 
 export async function createVitalSigns(encounterId, payload, recordedBy) {
+  const ctx = requireAppContext();
+
   const hasAny = Object.values(payload || {}).some(
     value => value !== null && value !== undefined && value !== ""
   );
@@ -66,7 +102,9 @@ export async function createVitalSigns(encounterId, payload, recordedBy) {
     systolic_bp: payload.systolic_bp ?? null,
     diastolic_bp: payload.diastolic_bp ?? null,
     pulse_rate: payload.pulse_rate ?? null,
-    respiratory_rate: payload.respiratory_rate ?? null
+    respiratory_rate: payload.respiratory_rate ?? null,
+    clinic_id: ctx.clinic_id,
+    branch_id: ctx.branch_id
   };
 
   const { data, error } = await supabase
@@ -80,6 +118,8 @@ export async function createVitalSigns(encounterId, payload, recordedBy) {
 }
 
 export async function getEncountersByPatient(patientId) {
+  const ctx = requireAppContext();
+
   const { data, error } = await supabase
     .from("encounters")
     .select(`
@@ -95,9 +135,13 @@ export async function getEncountersByPatient(patientId) {
       notes,
       closed_at,
       created_at,
-      updated_at
+      updated_at,
+      clinic_id,
+      branch_id
     `)
     .eq("patient_id", patientId)
+    .eq("clinic_id", ctx.clinic_id)
+    .eq("branch_id", ctx.branch_id)
     .order("encounter_at", { ascending: false });
 
   if (error) throw error;
@@ -105,10 +149,14 @@ export async function getEncountersByPatient(patientId) {
 }
 
 export async function getEncounterById(id) {
+  const ctx = requireAppContext();
+
   const { data, error } = await supabase
     .from("encounters")
     .select("*")
     .eq("id", id)
+    .eq("clinic_id", ctx.clinic_id)
+    .eq("branch_id", ctx.branch_id)
     .single();
 
   if (error) throw error;
@@ -116,6 +164,8 @@ export async function getEncounterById(id) {
 }
 
 export async function updateEncounter(encounterId, payload) {
+  const ctx = requireAppContext();
+
   const { data, error } = await supabase
     .from("encounters")
     .update({
@@ -123,9 +173,13 @@ export async function updateEncounter(encounterId, payload) {
       present_illness: payload.present_illness ?? null,
       physical_exam: payload.physical_exam ?? null,
       notes: payload.notes ?? null,
+      clinic_id: ctx.clinic_id,
+      branch_id: ctx.branch_id,
       updated_at: new Date().toISOString()
     })
     .eq("id", encounterId)
+    .eq("clinic_id", ctx.clinic_id)
+    .eq("branch_id", ctx.branch_id)
     .select()
     .single();
 
@@ -134,6 +188,8 @@ export async function updateEncounter(encounterId, payload) {
 }
 
 export async function upsertVitalSigns(encounterId, payload, recordedBy) {
+  const ctx = requireAppContext();
+
   const hasAny = Object.values(payload || {}).some(
     value => value !== null && value !== undefined && value !== ""
   );
@@ -144,6 +200,8 @@ export async function upsertVitalSigns(encounterId, payload, recordedBy) {
     .from("vital_signs")
     .select("id")
     .eq("encounter_id", encounterId)
+    .eq("clinic_id", ctx.clinic_id)
+    .eq("branch_id", ctx.branch_id)
     .order("recorded_at", { ascending: false })
     .limit(1)
     .maybeSingle();
@@ -159,7 +217,9 @@ export async function upsertVitalSigns(encounterId, payload, recordedBy) {
     systolic_bp: payload.systolic_bp ?? null,
     diastolic_bp: payload.diastolic_bp ?? null,
     pulse_rate: payload.pulse_rate ?? null,
-    respiratory_rate: payload.respiratory_rate ?? null
+    respiratory_rate: payload.respiratory_rate ?? null,
+    clinic_id: ctx.clinic_id,
+    branch_id: ctx.branch_id
   };
 
   if (existing?.id) {
@@ -185,6 +245,7 @@ export async function upsertVitalSigns(encounterId, payload, recordedBy) {
 }
 
 export async function upsertAppointmentForEncounter(encounterId, patientId, scheduledAt, reason, createdByUserId) {
+  const ctx = requireAppContext();
   const statusId = await getCatalogId("appointment_statuses", "SCHEDULED");
   if (!statusId) {
     throw new Error("No existe el catálogo SCHEDULED en appointment_statuses.");
@@ -194,6 +255,8 @@ export async function upsertAppointmentForEncounter(encounterId, patientId, sche
     .from("appointments")
     .select("id")
     .eq("encounter_id", encounterId)
+    .eq("clinic_id", ctx.clinic_id)
+    .eq("branch_id", ctx.branch_id)
     .order("created_at", { ascending: false })
     .limit(1)
     .maybeSingle();
@@ -207,6 +270,8 @@ export async function upsertAppointmentForEncounter(encounterId, patientId, sche
     scheduled_at: scheduledAt,
     reason: reason || null,
     created_by_user_id: createdByUserId,
+    clinic_id: ctx.clinic_id,
+    branch_id: ctx.branch_id,
     updated_at: new Date().toISOString()
   };
 
@@ -215,6 +280,8 @@ export async function upsertAppointmentForEncounter(encounterId, patientId, sche
       .from("appointments")
       .update(body)
       .eq("id", existing.id)
+      .eq("clinic_id", ctx.clinic_id)
+      .eq("branch_id", ctx.branch_id)
       .select()
       .single();
 
@@ -233,6 +300,7 @@ export async function upsertAppointmentForEncounter(encounterId, patientId, sche
 }
 
 export async function closeEncounter(encounterId, userId) {
+  const ctx = requireAppContext();
   const closedStatusId = await getCatalogId("encounter_statuses", "CLOSED");
   if (!closedStatusId) {
     throw new Error("No existe el catálogo CLOSED en encounter_statuses.");
@@ -245,10 +313,14 @@ export async function closeEncounter(encounterId, userId) {
     .update({
       encounter_status_id: closedStatusId,
       attended_by_user_id: userId,
+      clinic_id: ctx.clinic_id,
+      branch_id: ctx.branch_id,
       closed_at: now,
       updated_at: now
     })
     .eq("id", encounterId)
+    .eq("clinic_id", ctx.clinic_id)
+    .eq("branch_id", ctx.branch_id)
     .select()
     .single();
 

@@ -19,7 +19,33 @@
     </div>
   </div>
 
+  <div class="card" style="margin-bottom: 18px;">
+    <h2>Contexto de trabajo</h2>
+
+    <div class="form-grid">
+      <div>
+        <label for="clinicSelect">Clínica</label>
+        <select id="clinicSelect"></select>
+      </div>
+
+      <div>
+        <label for="branchSelect">Sucursal</label>
+        <select id="branchSelect"></select>
+      </div>
+    </div>
+
+    <div class="form-actions">
+      <button type="button" id="btnApplyContext" class="btn-primary">Aplicar filtro</button>
+    </div>
+  </div>
+
   <div class="menu-grid" id="dashboardMenu">
+
+    <div class="menu-card" data-roles="admin">
+      <h3>Clínicas y sucursales</h3>
+      <p>Administración de la estructura operativa.</p>
+      <a href="#/clinicas">Abrir módulo</a>
+    </div>
 
     <div class="menu-card" data-roles="admin,recepcion,medico">
       <h3>Mi perfil</h3>

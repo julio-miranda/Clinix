@@ -1,6 +1,36 @@
 // js/models/reportDetailModel.js
 import { supabase } from "../config/supabase.js";
 
+const CONTEXT_KEY = "app_context";
+
+function cleanId(value) {
+  const text = String(value ?? "").trim();
+  return text.length ? text : "";
+}
+
+function getAppContext() {
+  try {
+    const raw = sessionStorage.getItem(CONTEXT_KEY);
+    if (!raw) return { clinic_id: "", branch_id: "" };
+
+    const parsed = JSON.parse(raw);
+    return {
+      clinic_id: cleanId(parsed?.clinic_id),
+      branch_id: cleanId(parsed?.branch_id)
+    };
+  } catch {
+    return { clinic_id: "", branch_id: "" };
+  }
+}
+
+function requireAppContext() {
+  const ctx = getAppContext();
+  if (!ctx.clinic_id || !ctx.branch_id) {
+    throw new Error("Debe seleccionar clínica y sucursal.");
+  }
+  return ctx;
+}
+
 function toDayStartISO(dateString) {
   if (!dateString) return null;
   const d = new Date(`${dateString}T00:00:00`);
@@ -14,6 +44,8 @@ function toDayEndISO(dateString) {
 }
 
 export async function getConsultationsDetail(from, to) {
+  const ctx = requireAppContext();
+
   let query = supabase
     .from("encounters")
     .select(`
@@ -24,6 +56,8 @@ export async function getConsultationsDetail(from, to) {
       physical_exam,
       notes,
       created_at,
+      clinic_id,
+      branch_id,
       patients (
         id,
         medical_record_number,
@@ -45,6 +79,8 @@ export async function getConsultationsDetail(from, to) {
         )
       )
     `)
+    .eq("clinic_id", ctx.clinic_id)
+    .eq("branch_id", ctx.branch_id)
     .order("encounter_at", { ascending: false });
 
   const fromISO = toDayStartISO(from);
@@ -59,6 +95,8 @@ export async function getConsultationsDetail(from, to) {
 }
 
 export async function getPatientsDetail(from, to) {
+  const ctx = requireAppContext();
+
   let query = supabase
     .from("patients")
     .select(`
@@ -69,10 +107,14 @@ export async function getPatientsDetail(from, to) {
       birth_date,
       occupation,
       active,
+      clinic_id,
+      branch_id,
       created_at,
       updated_at,
       sex:sexes(code,name)
     `)
+    .eq("clinic_id", ctx.clinic_id)
+    .eq("branch_id", ctx.branch_id)
     .order("created_at", { ascending: false });
 
   const fromISO = toDayStartISO(from);
@@ -87,6 +129,8 @@ export async function getPatientsDetail(from, to) {
 }
 
 export async function getAppointmentsDetail(from, to) {
+  const ctx = requireAppContext();
+
   let query = supabase
     .from("appointments")
     .select(`
@@ -96,6 +140,8 @@ export async function getAppointmentsDetail(from, to) {
       created_at,
       patient_id,
       encounter_id,
+      clinic_id,
+      branch_id,
       patients (
         id,
         medical_record_number,
@@ -108,6 +154,8 @@ export async function getAppointmentsDetail(from, to) {
         name
       )
     `)
+    .eq("clinic_id", ctx.clinic_id)
+    .eq("branch_id", ctx.branch_id)
     .order("scheduled_at", { ascending: true });
 
   const fromISO = toDayStartISO(from);
@@ -122,6 +170,8 @@ export async function getAppointmentsDetail(from, to) {
 }
 
 export async function getDiagnosesDetail(from, to) {
+  const ctx = requireAppContext();
+
   let query = supabase
     .from("encounter_diagnoses")
     .select(`
@@ -129,9 +179,13 @@ export async function getDiagnosesDetail(from, to) {
       is_primary,
       notes,
       created_at,
+      clinic_id,
+      branch_id,
       encounters (
         id,
         encounter_at,
+        clinic_id,
+        branch_id,
         patients (
           id,
           medical_record_number,
@@ -145,6 +199,8 @@ export async function getDiagnosesDetail(from, to) {
         description
       )
     `)
+    .eq("clinic_id", ctx.clinic_id)
+    .eq("branch_id", ctx.branch_id)
     .order("created_at", { ascending: false });
 
   const fromISO = toDayStartISO(from);
@@ -159,6 +215,8 @@ export async function getDiagnosesDetail(from, to) {
 }
 
 export async function getTicketsDetail(from, to) {
+  const ctx = requireAppContext();
+
   let query = supabase
     .from("consultation_tickets")
     .select(`
@@ -174,6 +232,8 @@ export async function getTicketsDetail(from, to) {
       notes,
       issued_at,
       paid_at,
+      clinic_id,
+      branch_id,
       patients (
         id,
         medical_record_number,
@@ -186,6 +246,8 @@ export async function getTicketsDetail(from, to) {
         chief_complaint
       )
     `)
+    .eq("clinic_id", ctx.clinic_id)
+    .eq("branch_id", ctx.branch_id)
     .order("issued_at", { ascending: false });
 
   const fromISO = toDayStartISO(from);

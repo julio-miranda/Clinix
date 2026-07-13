@@ -1,5 +1,6 @@
 // js/controllers/usersController.js
 import { UsersModel } from "../models/usersModel.js";
+import { getClinics, getBranchesByClinic } from "../models/clinicModel.js";
 
 const S = {
   form: "#usuarioForm",
@@ -10,6 +11,8 @@ const S = {
   confirmPassword: "#usuarioConfirmPassword",
   active: "#usuarioActivo",
   rolesSelect: "#usuarioRoles",
+  clinicSelect: "#usuarioClinicId",
+  branchSelect: "#usuarioBranchId",
   search: "#usuarioSearch",
   tableBody: "#usuariosTableBody",
   btnNew: "#btnNuevoUsuario",
@@ -23,6 +26,8 @@ const S = {
 const state = {
   users: [],
   roles: [],
+  clinics: [],
+  branches: [],
   editingUserId: null,
 };
 
@@ -112,6 +117,15 @@ function resetForm() {
       opt.selected = false;
     });
   }
+
+  const clinicSelect = el(S.clinicSelect);
+  const branchSelect = el(S.branchSelect);
+
+  if (clinicSelect) clinicSelect.value = "";
+  if (branchSelect) {
+    branchSelect.innerHTML = `<option value="">Seleccione primero una clínica</option>`;
+    branchSelect.disabled = true;
+  }
 }
 
 function validateForm() {
@@ -119,9 +133,13 @@ function validateForm() {
   const fullName = getValue(S.fullName);
   const password = getValue(S.password);
   const confirmPassword = getValue(S.confirmPassword);
+  const clinicId = getValue(S.clinicSelect);
+  const branchId = getValue(S.branchSelect);
 
   if (!email) throw new Error("El correo es obligatorio.");
   if (!fullName) throw new Error("El nombre completo es obligatorio.");
+  if (!clinicId) throw new Error("Debe seleccionar una clínica.");
+  if (!branchId) throw new Error("Debe seleccionar una sucursal.");
 
   if (!state.editingUserId) {
     if (!password) {
@@ -168,23 +186,82 @@ function renderRolesOptions() {
   });
 }
 
+function renderClinicOptions() {
+  const clinicSelect = el(S.clinicSelect);
+  if (!clinicSelect) return;
+
+  clinicSelect.innerHTML = `<option value="">Seleccione una clínica</option>`;
+
+  state.clinics.forEach((clinic) => {
+    const option = document.createElement("option");
+    option.value = clinic.id;
+    option.textContent = clinic.name || "";
+    clinicSelect.appendChild(option);
+  });
+}
+
+function renderBranchOptions(branches = [], selectedId = "") {
+  const branchSelect = el(S.branchSelect);
+  if (!branchSelect) return;
+
+  branchSelect.innerHTML = `<option value="">Seleccione una sucursal</option>`;
+
+  branches.forEach((branch) => {
+    const option = document.createElement("option");
+    option.value = branch.id;
+    option.textContent = branch.name || "";
+    if (selectedId && String(selectedId) === String(branch.id)) {
+      option.selected = true;
+    }
+    branchSelect.appendChild(option);
+  });
+
+  branchSelect.disabled = branches.length === 0;
+}
+
+async function loadBranchesForClinic(clinicId, selectedBranchId = "") {
+  const branchSelect = el(S.branchSelect);
+  if (!branchSelect) return;
+
+  if (!clinicId) {
+    branchSelect.innerHTML = `<option value="">Seleccione primero una clínica</option>`;
+    branchSelect.disabled = true;
+    return;
+  }
+
+  branchSelect.innerHTML = `<option value="">Cargando...</option>`;
+
+  try {
+    state.branches = await getBranchesByClinic(clinicId);
+    renderBranchOptions(state.branches, selectedBranchId);
+  } catch (error) {
+    console.error(error);
+    branchSelect.innerHTML = `<option value="">Error cargando sucursales</option>`;
+    branchSelect.disabled = true;
+  }
+}
+
 function renderUsersTable() {
   const tbody = el(S.tableBody);
   if (!tbody) return;
 
   if (!state.users.length) {
-    tbody.innerHTML = `<tr><td colspan="8">No hay usuarios.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="9">No hay usuarios.</td></tr>`;
     return;
   }
 
   tbody.innerHTML = state.users
     .map((user) => {
       const roles = (user.roles || []).map((r) => r.name).join(", ");
+      const clinicName = user.clinic?.name || "";
+      const branchName = user.branch?.name || "";
 
       return `
       <tr>
         <td>${escapeHtml(user.full_name)}</td>
         <td>${escapeHtml(user.email)}</td>
+        <td>${escapeHtml(clinicName)}</td>
+        <td>${escapeHtml(branchName)}</td>
         <td>${escapeHtml(roles)}</td>
         <td>${user.active ? "Activo" : "Inactivo"}</td>
         <td>${user.created_at ? new Date(user.created_at).toLocaleString("es-SV") : "-"}</td>
@@ -202,6 +279,11 @@ function renderUsersTable() {
 async function loadRoles() {
   state.roles = await UsersModel.getRoles();
   renderRolesOptions();
+}
+
+async function loadClinics() {
+  state.clinics = await getClinics("");
+  renderClinicOptions();
 }
 
 async function loadUsers() {
@@ -225,6 +307,8 @@ async function saveUser(event) {
     const active = getChecked(S.active);
     const roleCodes = getSelectedRoleCodes();
     const role = roleCodes[0] || "recepcion";
+    const clinicId = getValue(S.clinicSelect);
+    const branchId = getValue(S.branchSelect);
 
     const result = await UsersModel.saveUser({
       action: state.editingUserId ? "update" : "create",
@@ -237,6 +321,8 @@ async function saveUser(event) {
       active,
       role,
       role_codes: roleCodes.length ? roleCodes : [role],
+      clinic_id: clinicId,
+      branch_id: branchId,
     });
 
     closeModal();
@@ -296,6 +382,14 @@ async function handleTableClick(event) {
       });
     }
 
+    const clinicId = user.clinic_id || "";
+    const branchId = user.branch_id || "";
+
+    const clinicSelect = el(S.clinicSelect);
+    if (clinicSelect) clinicSelect.value = clinicId;
+
+    await loadBranchesForClinic(clinicId, branchId);
+
     openModal();
   }
 
@@ -304,11 +398,17 @@ async function handleTableClick(event) {
   }
 }
 
+async function handleClinicChange() {
+  const clinicId = getValue(S.clinicSelect);
+  await loadBranchesForClinic(clinicId, "");
+}
+
 function bindEvents() {
   el(S.form)?.addEventListener("submit", saveUser);
 
-  el(S.btnNew)?.addEventListener("click", () => {
+  el(S.btnNew)?.addEventListener("click", async () => {
     resetForm();
+    await loadClinics();
     openModal();
   });
 
@@ -322,13 +422,22 @@ function bindEvents() {
   el(S.tableBody)?.addEventListener("click", handleTableClick);
 
   el(S.btnCancel)?.addEventListener("click", cancelUserForm);
+
+  el(S.clinicSelect)?.addEventListener("change", handleClinicChange);
 }
 
 export async function initUsersView() {
   try {
     bindEvents();
     await loadRoles();
+    await loadClinics();
     await loadUsers();
+
+    const branchSelect = el(S.branchSelect);
+    if (branchSelect) {
+      branchSelect.innerHTML = `<option value="">Seleccione primero una clínica</option>`;
+      branchSelect.disabled = true;
+    }
   } catch (error) {
     console.error(error);
     showMessage("Error inicializando usuarios.", "error");

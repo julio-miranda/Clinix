@@ -17,6 +17,7 @@ import { initCatalogosView } from "./controllers/catalogController.js";
 import { initReportDetailView } from "./controllers/reportDetailController.js";
 import { initUsersView } from "./controllers/usersController.js";
 import { initProfileView } from "./controllers/profileController.js";
+import { initClinicsView } from "./controllers/clinicController.js";
 
 let navigationToken = 0;
 
@@ -35,6 +36,11 @@ const routes = {
     view: "./views/perfil.html",
     roles: ["admin", "medico", "recepcion"],
     init: initProfileView
+  },
+  "#/clinicas": {
+    view: "./views/clinicas.html",
+    roles: ["admin"],
+    init: initClinicsView
   },
   "#/pacientes": {
     view: "./views/pacientes.html",
@@ -175,8 +181,6 @@ export async function router() {
     if (typeof route.init === "function") {
       await route.init(params);
     }
-
-    if (token !== navigationToken) return;
   } catch (error) {
     console.error("Error en router:", error);
     renderSystemError(error?.message || "No se pudo cargar la página.");
