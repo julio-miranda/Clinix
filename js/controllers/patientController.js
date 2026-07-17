@@ -59,6 +59,35 @@ function setVitalsIntoForm(form, vitals) {
   set("respiratory_rate", vitals?.respiratory_rate ?? "");
 }
 
+function calculateAge(birthDateValue) {
+  if (!birthDateValue) return "";
+
+  const cleanValue = String(birthDateValue).trim().slice(0, 10);
+  const birthDate = new Date(`${cleanValue}T00:00:00`);
+  if (Number.isNaN(birthDate.getTime())) return "";
+
+  const today = new Date();
+  let age = today.getFullYear() - birthDate.getFullYear();
+
+  const monthDiff = today.getMonth() - birthDate.getMonth();
+  const dayDiff = today.getDate() - birthDate.getDate();
+
+  if (monthDiff < 0 || (monthDiff === 0 && dayDiff < 0)) {
+    age -= 1;
+  }
+
+  return age >= 0 ? String(age) : "";
+}
+
+function updateAgeField(form) {
+  const birthDateField = form.querySelector('[name="birth_date"]');
+  const ageField = form.querySelector('[name="age"]');
+
+  if (!birthDateField || !ageField) return;
+
+  ageField.value = calculateAge(birthDateField.value);
+}
+
 async function ensureMrnVisible(form) {
   const mrnField = form.querySelector('[name="medical_record_number"]');
   if (!mrnField) return;
@@ -97,11 +126,20 @@ export async function initPatientFormView(params = new URLSearchParams()) {
 
   await loadSexesSelect();
 
+  const birthDateField = form.querySelector('[name="birth_date"]');
+  if (birthDateField) {
+    const syncAge = () => updateAgeField(form);
+    birthDateField.addEventListener("input", syncAge);
+    birthDateField.addEventListener("change", syncAge);
+    birthDateField.addEventListener("blur", syncAge);
+  }
+
   const editingId = params.get("id");
   if (editingId) {
     await loadPatientIntoForm(editingId);
   } else {
     await ensureMrnVisible(form);
+    updateAgeField(form);
   }
 
   const mrnField = form.querySelector('[name="medical_record_number"]');
@@ -171,7 +209,7 @@ async function loadPatientIntoForm(id) {
   if (lastName) lastName.value = patient.last_name || "";
 
   const birthDate = form.querySelector('[name="birth_date"]');
-  if (birthDate) birthDate.value = patient.birth_date || "";
+  if (birthDate) birthDate.value = (patient.birth_date || "").slice(0, 10);
 
   const occupation = form.querySelector('[name="occupation"]');
   if (occupation) occupation.value = patient.occupation || "";
@@ -189,6 +227,7 @@ async function loadPatientIntoForm(id) {
   if (active) active.checked = Boolean(patient.active);
 
   setVitalsIntoForm(form, vitals);
+  updateAgeField(form);
 }
 
 export async function loadPatientsTable(containerId, search = "") {

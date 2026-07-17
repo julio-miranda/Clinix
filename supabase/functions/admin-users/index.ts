@@ -16,6 +16,8 @@ type AppUserRow = {
   email: string;
   full_name: string;
   active: boolean;
+  clinic_id: string | null;
+  branch_id: string | null;
 };
 
 type ProfileRow = {
@@ -23,6 +25,8 @@ type ProfileRow = {
   full_name: string;
   role: string;
   active: boolean;
+  clinic_id: string | null;
+  branch_id: string | null;
 };
 
 type UserSnapshot = {
@@ -253,12 +257,12 @@ async function loadUserSnapshot(
     await Promise.all([
       admin
         .from("app_users")
-        .select("id, email, full_name, active")
+        .select("id, email, full_name, active, clinic_id, branch_id")
         .eq("id", userId)
         .maybeSingle(),
       admin
         .from("profiles")
-        .select("id, full_name, role, active")
+        .select("id, full_name, role, active, clinic_id, branch_id")
         .eq("id", userId)
         .maybeSingle(),
     ]);
@@ -298,6 +302,8 @@ async function loadUserSnapshot(
         email: asTrimmedString((appUser as { email?: unknown }).email),
         full_name: asTrimmedString((appUser as { full_name?: unknown }).full_name),
         active: Boolean((appUser as { active?: unknown }).active),
+        clinic_id: toNullableString((appUser as { clinic_id?: unknown }).clinic_id),
+        branch_id: toNullableString((appUser as { branch_id?: unknown }).branch_id),
       }
       : null,
     profile: profile
@@ -306,6 +312,8 @@ async function loadUserSnapshot(
         full_name: asTrimmedString((profile as { full_name?: unknown }).full_name),
         role: asTrimmedString((profile as { role?: unknown }).role),
         active: Boolean((profile as { active?: unknown }).active),
+        clinic_id: toNullableString((profile as { clinic_id?: unknown }).clinic_id),
+        branch_id: toNullableString((profile as { branch_id?: unknown }).branch_id),
       }
       : null,
     roleCodes,
@@ -318,22 +326,43 @@ async function restoreSnapshot(
   snapshot: UserSnapshot,
 ) {
   if (snapshot.appUser) {
-    const { error } = await admin.rpc("sync_app_user_account", {
-      p_user_id: userId,
-      p_email: snapshot.appUser.email,
-      p_full_name: snapshot.appUser.full_name,
-      p_active: snapshot.appUser.active,
-    });
+    const { error } = await admin
+      .from("app_users")
+      .upsert(
+        {
+          id: userId,
+          email: snapshot.appUser.email,
+          full_name: snapshot.appUser.full_name,
+          active: snapshot.appUser.active,
+          clinic_id: snapshot.appUser.clinic_id,
+          branch_id: snapshot.appUser.branch_id,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "id" },
+      )
+      .select("id")
+      .single();
+
     if (error) throw error;
   }
 
   if (snapshot.profile) {
-    const { error } = await admin.rpc("sync_profile_account", {
-      p_user_id: userId,
-      p_full_name: snapshot.profile.full_name,
-      p_role: snapshot.profile.role,
-      p_active: snapshot.profile.active,
-    });
+    const { error } = await admin
+      .from("profiles")
+      .upsert(
+        {
+          id: userId,
+          full_name: snapshot.profile.full_name,
+          role: snapshot.profile.role,
+          active: snapshot.profile.active,
+          clinic_id: snapshot.profile.clinic_id,
+          branch_id: snapshot.profile.branch_id,
+        },
+        { onConflict: "id" },
+      )
+      .select("id")
+      .single();
+
     if (error) throw error;
   }
 
@@ -350,13 +379,25 @@ async function syncAppUser(
   email: string,
   fullName: string,
   active: boolean,
+  clinicId: string | null,
+  branchId: string | null,
 ) {
-  const { data, error } = await admin.rpc("sync_app_user_account", {
-    p_user_id: userId,
-    p_email: email,
-    p_full_name: fullName,
-    p_active: active,
-  });
+  const { data, error } = await admin
+    .from("app_users")
+    .upsert(
+      {
+        id: userId,
+        email,
+        full_name: fullName,
+        active,
+        clinic_id: clinicId,
+        branch_id: branchId,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "id" },
+    )
+    .select("id, email, full_name, active, clinic_id, branch_id, created_at, updated_at")
+    .single();
 
   if (error) throw error;
   return data;
@@ -368,13 +409,24 @@ async function syncProfile(
   fullName: string,
   role: string,
   active: boolean,
+  clinicId: string | null,
+  branchId: string | null,
 ) {
-  const { data, error } = await admin.rpc("sync_profile_account", {
-    p_user_id: userId,
-    p_full_name: fullName,
-    p_role: role,
-    p_active: active,
-  });
+  const { data, error } = await admin
+    .from("profiles")
+    .upsert(
+      {
+        id: userId,
+        full_name: fullName,
+        role,
+        active,
+        clinic_id: clinicId,
+        branch_id: branchId,
+      },
+      { onConflict: "id" },
+    )
+    .select("id, full_name, role, active, clinic_id, branch_id, created_at")
+    .single();
 
   if (error) throw error;
   return data;
@@ -398,29 +450,15 @@ async function createAuthUser(
   email: string,
   password: string,
 ) {
-  console.log("========== CREATE AUTH USER ==========");
-  console.log("email:", email);
-  console.log("passwordLength:", password?.length ?? 0);
-
   const response = await admin.auth.admin.createUser({
     email,
     password,
     email_confirm: true,
   });
 
-  console.log(
-    "SUPABASE AUTH RESPONSE:",
-    JSON.stringify(response, null, 2),
-  );
-
   const { data, error } = response;
 
   if (error) {
-    console.error(
-      "CREATE USER ERROR:",
-      JSON.stringify(error, null, 2),
-    );
-
     throw new Error(
       JSON.stringify({
         message: error.message,
@@ -432,12 +470,8 @@ async function createAuthUser(
   }
 
   if (!data?.user?.id) {
-    throw new Error(
-      "Supabase devolvió éxito pero no retornó user.id",
-    );
+    throw new Error("Supabase devolvió éxito pero no retornó user.id");
   }
-
-  console.log("USER CREATED:", data.user.id);
 
   return data.user.id;
 }
@@ -488,18 +522,15 @@ async function softDeleteUser(admin: SupabaseAdminClient, userId: string) {
 
   if (profileError) throw profileError;
 
-  // === MODIFICACIÓN CON TOLERANCIA A FALLOS ===
   const { error: authDeleteError } = await admin.auth.admin.deleteUser(userId);
   if (authDeleteError) {
     const errorMsg = authDeleteError.message?.toLowerCase() || "";
-    const isNotFound = errorMsg.includes("not found") || (authDeleteError as any).status === 404;
-    
-    // Si el error es otra cosa (ej. pérdida de conexión), lanzamos el error.
-    // Si es simplemente que ya no existía en Auth, lo ignoramos y dejamos que termine con éxito.
+    const isNotFound =
+      errorMsg.includes("not found") || (authDeleteError as any).status === 404;
+
     if (!isNotFound) {
       throw authDeleteError;
     }
-    console.warn(`Aviso en softDelete: El usuario Auth con ID ${userId} ya no existía en GoTrue.`);
   }
 }
 
@@ -671,6 +702,28 @@ function extractRoleCodes(body: any): string[] {
   return dedupeRoleCodes(raw);
 }
 
+function extractClinicId(body: any): string | null {
+  return toNullableString(
+    body?.clinic_id ??
+    body?.clinicId ??
+    body?.data?.clinic_id ??
+    body?.data?.clinicId ??
+    body?.payload?.clinic_id ??
+    body?.payload?.clinicId
+  );
+}
+
+function extractBranchId(body: any): string | null {
+  return toNullableString(
+    body?.branch_id ??
+    body?.branchId ??
+    body?.data?.branch_id ??
+    body?.data?.branchId ??
+    body?.payload?.branch_id ??
+    body?.payload?.branchId
+  );
+}
+
 async function handleCreate(admin: SupabaseAdminClient, body: any) {
   const stage = {
     value: "create:init",
@@ -681,10 +734,20 @@ async function handleCreate(admin: SupabaseAdminClient, body: any) {
   const fullName = normalizeName(extractFullName(body));
   const role = normalizeRole(extractRole(body));
   const roleCodes = extractRoleCodes(body);
+  const clinicId = extractClinicId(body);
+  const branchId = extractBranchId(body);
   const active = body?.active !== false;
 
   if (!email || !password || !fullName) {
     return json({ error: "email, password y full_name son obligatorios" }, 400);
+  }
+
+  if (!clinicId || !branchId) {
+    return json({ error: "clinic_id y branch_id son obligatorios" }, 400);
+  }
+
+  if (!isUuid(clinicId) || !isUuid(branchId)) {
+    return json({ error: "clinic_id o branch_id inválidos" }, 400);
   }
 
   if (!isValidEmail(email)) {
@@ -722,8 +785,6 @@ async function handleCreate(admin: SupabaseAdminClient, body: any) {
   let newAuthUserId: string | null = null;
 
   try {
-    console.log("SERVICE ROLE EXISTS:", !!Deno.env.get("SUPABASE_SERVICE_ROLE_KEY"));
-    console.log("SUPABASE URL EXISTS:", !!Deno.env.get("SUPABASE_URL"));
     stage.value = "create:auth";
     newAuthUserId = await createAuthUser(admin, email, password);
 
@@ -734,6 +795,8 @@ async function handleCreate(admin: SupabaseAdminClient, body: any) {
       email,
       fullName,
       active,
+      clinicId,
+      branchId,
     );
 
     stage.value = "create:profile";
@@ -743,6 +806,8 @@ async function handleCreate(admin: SupabaseAdminClient, body: any) {
       fullName,
       role,
       active,
+      clinicId,
+      branchId,
     );
 
     stage.value = "create:roles";
@@ -757,19 +822,17 @@ async function handleCreate(admin: SupabaseAdminClient, body: any) {
       roleCodes: finalRoleCodes,
     }, 200);
   } catch (error) {
-    console.error(
-      "HANDLE CREATE ERROR:",
-      JSON.stringify(error, null, 2),
-    );
-
     await cleanupOnFailure(admin, newAuthUserId);
 
     const errorMessage = (error as Error)?.message || "";
-    
-    // Captura defensiva de la desincronización en auth.users (Error 500 interno de GoTrue)
-    if (errorMessage.includes("Database error creating new user") || errorMessage.includes("unexpected_failure")) {
+
+    if (
+      errorMessage.includes("Database error creating new user") ||
+      errorMessage.includes("unexpected_failure")
+    ) {
       return json({
-        error: "El correo ya está registrado en el sistema de autenticación (auth.users), pero se encuentra desincronizado de las tablas de la aplicación. Por favor, elimine el registro fantasma desde la pestaña Authentication en Supabase antes de reintentar.",
+        error:
+          "El correo ya está registrado en el sistema de autenticación, pero existe desincronización con la aplicación. Elimine el registro fantasma en Authentication y reintente.",
         stage: stage.value,
         details: serializeError(error),
       }, 409);
@@ -783,6 +846,8 @@ async function handleCreate(admin: SupabaseAdminClient, body: any) {
         full_name: fullName,
         role,
         role_codes: finalRoleCodes,
+        clinic_id: clinicId,
+        branch_id: branchId,
         auth_user_id: newAuthUserId,
         error: serializeError(error),
       },
@@ -805,7 +870,17 @@ async function handleUpdate(admin: SupabaseAdminClient, body: any) {
   const fullName = normalizeName(extractFullName(body));
   const role = normalizeRole(extractRole(body));
   const roleCodes = extractRoleCodes(body);
+  const clinicId = extractClinicId(body);
+  const branchId = extractBranchId(body);
   const active = body?.active !== false;
+
+  if (!clinicId || !branchId) {
+    return json({ error: "clinic_id y branch_id son obligatorios" }, 400);
+  }
+
+  if (!isUuid(clinicId) || !isUuid(branchId)) {
+    return json({ error: "clinic_id o branch_id inválidos" }, 400);
+  }
 
   const { data: exists, error: existsError } = await admin
     .from("app_users")
@@ -845,6 +920,8 @@ async function handleUpdate(admin: SupabaseAdminClient, body: any) {
       email || snapshot.appUser?.email || "",
       fullName || snapshot.appUser?.full_name || snapshot.profile?.full_name || "",
       active,
+      clinicId,
+      branchId,
     );
 
     stage.value = "update:profile";
@@ -854,6 +931,8 @@ async function handleUpdate(admin: SupabaseAdminClient, body: any) {
       fullName || snapshot.profile?.full_name || snapshot.appUser?.full_name || "",
       role || snapshot.profile?.role || "RECEPCION",
       active,
+      clinicId,
+      branchId,
     );
 
     stage.value = "update:roles";
@@ -871,12 +950,6 @@ async function handleUpdate(admin: SupabaseAdminClient, body: any) {
       userId,
     }, 200);
   } catch (error) {
-    console.error("admin-users update failed:", {
-      stage: stage.value,
-      error: serializeError(error),
-      userId,
-    });
-
     await restoreSnapshot(admin, userId, snapshot).catch((rollbackError) => {
       console.error("Rollback update failed:", serializeError(rollbackError));
     });
@@ -886,6 +959,8 @@ async function handleUpdate(admin: SupabaseAdminClient, body: any) {
       stage: stage.value,
       details: {
         userId,
+        clinic_id: clinicId,
+        branch_id: branchId,
         error: serializeError(error),
       },
     }, 500);
@@ -926,11 +1001,6 @@ async function handleDelete(admin: SupabaseAdminClient, body: any) {
       userId,
     }, 200);
   } catch (error) {
-    console.error("admin-users delete failed:", {
-      error: serializeError(error),
-      userId,
-    });
-
     return json({
       error: asTrimmedString((error as Error)?.message) || "Error al eliminar usuario",
       stage: "delete",
@@ -988,11 +1058,6 @@ Deno.serve(async (req) => {
 
     return json({ error: "Acción no soportada" }, 400);
   } catch (error) {
-    console.error("admin-users fatal error:", {
-      error: serializeError(error),
-      stack: (error as Error)?.stack || null,
-    });
-
     return json({
       error: asTrimmedString((error as Error)?.message) || "Error inesperado",
       details: {

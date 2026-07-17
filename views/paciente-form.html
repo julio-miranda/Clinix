@@ -40,7 +40,17 @@
     <input name="last_name" />
 
     <label>Fecha de nacimiento</label>
-    <input type="date" name="birth_date" />
+    <input type="date" name="birth_date" id="birth_date" />
+
+    <label>Edad</label>
+    <input
+      type="text"
+      name="age"
+      id="age"
+      readonly
+      placeholder="Se calcula automáticamente"
+    />
+    <small>La edad se calcula automáticamente según la fecha de nacimiento.</small>
 
     <label>Sexo</label>
     <select id="sex_id" name="sex_id"></select>
