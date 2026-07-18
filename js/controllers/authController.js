@@ -132,57 +132,137 @@ async function loadSessionUser() {
   return sessionUser;
 }
 
-function fillContextSelect(select, items, placeholder, selectedId = "") {
-  if (!select) return;
+function setDatalistOptions(datalist, items, displayKey = "name") {
+  if (!datalist) return;
 
-  select.innerHTML = `<option value="">${placeholder}</option>`;
-
+  datalist.innerHTML = "";
   for (const item of items || []) {
     const option = document.createElement("option");
-    option.value = item.id;
-    option.textContent = item.name || "";
-    if (String(selectedId) === String(item.id)) {
-      option.selected = true;
-    }
-    select.appendChild(option);
+    option.value = item?.[displayKey] || "";
+    datalist.appendChild(option);
   }
 }
 
+function findItemByName(items, name) {
+  const target = String(name ?? "").trim().toLowerCase();
+  if (!target) return null;
+
+  return (items || []).find(item => String(item?.name ?? "").trim().toLowerCase() === target) || null;
+}
+
+function syncHiddenId(inputEl, hiddenEl, items, fallbackValue = "") {
+  if (!inputEl || !hiddenEl) return null;
+
+  const match = findItemByName(items, inputEl.value);
+  hiddenEl.value = match?.id || fallbackValue || "";
+  return match || null;
+}
+
 async function initDashboardContext() {
-  const clinicSelect = document.getElementById("clinicSelect");
-  const branchSelect = document.getElementById("branchSelect");
+  const clinicInput = document.getElementById("clinicInput");
+  const branchInput = document.getElementById("branchInput");
+  const clinicIdInput = document.getElementById("clinicId");
+  const branchIdInput = document.getElementById("branchId");
+  const clinicOptions = document.getElementById("clinicOptions");
+  const branchOptions = document.getElementById("branchOptions");
   const btnApply = document.getElementById("btnApplyContext");
 
-  if (!clinicSelect || !branchSelect) return;
+  if (!clinicInput || !branchInput || !clinicIdInput || !branchIdInput) return;
 
   const ctx = getAppContext();
 
   const clinics = await getClinics();
-  fillContextSelect(clinicSelect, clinics, "Seleccione clínica", ctx.clinic_id);
+  setDatalistOptions(clinicOptions, clinics, "name");
+
+  const selectedClinic = clinics.find(item => String(item.id) === String(ctx.clinic_id)) || null;
+  if (selectedClinic) {
+    clinicInput.value = selectedClinic.name || "";
+    clinicIdInput.value = selectedClinic.id || "";
+  } else {
+    clinicInput.value = "";
+    clinicIdInput.value = "";
+  }
 
   const loadBranches = async (clinicId, selectedBranchId = "") => {
+    branchInput.disabled = true;
+    branchInput.value = "";
+    branchIdInput.value = "";
+    branchOptions.innerHTML = "";
+
+    if (!clinicId) return [];
+
     const branches = await getBranches(clinicId);
-    fillContextSelect(branchSelect, branches, "Seleccione sucursal", selectedBranchId);
+    setDatalistOptions(branchOptions, branches, "name");
+
+    const selectedBranch = branches.find(item => String(item.id) === String(selectedBranchId)) || null;
+    if (selectedBranch) {
+      branchInput.value = selectedBranch.name || "";
+      branchIdInput.value = selectedBranch.id || "";
+    }
+
+    branchInput.disabled = false;
+    return branches;
   };
 
-  clinicSelect.addEventListener("change", async () => {
-    branchSelect.innerHTML = `<option value="">Cargando...</option>`;
-    await loadBranches(clinicSelect.value, "");
+  let branchesCache = await loadBranches(ctx.clinic_id, ctx.branch_id);
+
+  clinicInput.addEventListener("input", async () => {
+    const match = syncHiddenId(clinicInput, clinicIdInput, clinics);
+
+    if (!match) {
+      branchInput.disabled = true;
+      branchInput.value = "";
+      branchIdInput.value = "";
+      branchOptions.innerHTML = "";
+      branchesCache = [];
+      return;
+    }
+
+    branchesCache = await loadBranches(match.id, "");
   });
 
-  await loadBranches(ctx.clinic_id, ctx.branch_id);
+  clinicInput.addEventListener("change", async () => {
+    const match = syncHiddenId(clinicInput, clinicIdInput, clinics);
+
+    if (!match) {
+      branchInput.disabled = true;
+      branchInput.value = "";
+      branchIdInput.value = "";
+      branchOptions.innerHTML = "";
+      branchesCache = [];
+      return;
+    }
+
+    branchesCache = await loadBranches(match.id, "");
+  });
+
+  branchInput.addEventListener("input", () => {
+    syncHiddenId(branchInput, branchIdInput, branchesCache);
+  });
+
+  branchInput.addEventListener("change", () => {
+    syncHiddenId(branchInput, branchIdInput, branchesCache);
+  });
 
   if (btnApply) {
     btnApply.addEventListener("click", () => {
-      const next = setAppContext({
-        clinic_id: clinicSelect.value,
-        branch_id: branchSelect.value
-      });
+      const clinicMatch = syncHiddenId(clinicInput, clinicIdInput, clinics);
+      const branchMatch = syncHiddenId(branchInput, branchIdInput, branchesCache);
 
-      if (!next.clinic_id || !next.branch_id) {
-        alert("Seleccione clínica y sucursal.");
+      if (!clinicMatch) {
+        alert("Seleccione una clínica válida.");
         return;
       }
+
+      if (!branchMatch) {
+        alert("Seleccione una sucursal válida.");
+        return;
+      }
+
+      setAppContext({
+        clinic_id: clinicMatch.id,
+        branch_id: branchMatch.id
+      });
 
       window.location.hash = "#/dashboard";
     });

@@ -11,8 +11,15 @@ const S = {
   confirmPassword: "#usuarioConfirmPassword",
   active: "#usuarioActivo",
   rolesSelect: "#usuarioRoles",
-  clinicSelect: "#usuarioClinicId",
-  branchSelect: "#usuarioBranchId",
+
+  clinicInput: "#usuarioClinicInput",
+  clinicId: "#usuarioClinicId",
+  clinicOptions: "#clinicOptions",
+
+  branchInput: "#usuarioBranchInput",
+  branchId: "#usuarioBranchId",
+  branchOptions: "#branchOptions",
+
   search: "#usuarioSearch",
   tableBody: "#usuariosTableBody",
   btnNew: "#btnNuevoUsuario",
@@ -118,14 +125,19 @@ function resetForm() {
     });
   }
 
-  const clinicSelect = el(S.clinicSelect);
-  const branchSelect = el(S.branchSelect);
+  setValue(S.clinicInput, "");
+  setValue(S.clinicId, "");
+  setValue(S.branchInput, "");
+  setValue(S.branchId, "");
 
-  if (clinicSelect) clinicSelect.value = "";
-  if (branchSelect) {
-    branchSelect.innerHTML = `<option value="">Seleccione primero una clínica</option>`;
-    branchSelect.disabled = true;
-  }
+  const branchInput = el(S.branchInput);
+  if (branchInput) branchInput.disabled = true;
+
+  const branchOptions = el(S.branchOptions);
+  if (branchOptions) branchOptions.innerHTML = "";
+
+  const clinicInput = el(S.clinicInput);
+  if (clinicInput) clinicInput.focus();
 }
 
 function validateForm() {
@@ -133,13 +145,13 @@ function validateForm() {
   const fullName = getValue(S.fullName);
   const password = getValue(S.password);
   const confirmPassword = getValue(S.confirmPassword);
-  const clinicId = getValue(S.clinicSelect);
-  const branchId = getValue(S.branchSelect);
+  const clinicId = getValue(S.clinicId);
+  const branchId = getValue(S.branchId);
 
   if (!email) throw new Error("El correo es obligatorio.");
   if (!fullName) throw new Error("El nombre completo es obligatorio.");
-  if (!clinicId) throw new Error("Debe seleccionar una clínica.");
-  if (!branchId) throw new Error("Debe seleccionar una sucursal.");
+  if (!clinicId) throw new Error("Debe seleccionar una clínica válida.");
+  if (!branchId) throw new Error("Debe seleccionar una sucursal válida.");
 
   if (!state.editingUserId) {
     if (!password) {
@@ -186,58 +198,85 @@ function renderRolesOptions() {
   });
 }
 
-function renderClinicOptions() {
-  const clinicSelect = el(S.clinicSelect);
-  if (!clinicSelect) return;
+function setDatalistOptions(datalist, items, labelKey = "name") {
+  if (!datalist) return;
 
-  clinicSelect.innerHTML = `<option value="">Seleccione una clínica</option>`;
+  datalist.innerHTML = "";
 
-  state.clinics.forEach((clinic) => {
+  (items || []).forEach((item) => {
     const option = document.createElement("option");
-    option.value = clinic.id;
-    option.textContent = clinic.name || "";
-    clinicSelect.appendChild(option);
+    option.value = item?.[labelKey] || "";
+    datalist.appendChild(option);
   });
 }
 
-function renderBranchOptions(branches = [], selectedId = "") {
-  const branchSelect = el(S.branchSelect);
-  if (!branchSelect) return;
+function findItemByExactName(items, value) {
+  const target = String(value ?? "").trim().toLowerCase();
+  if (!target) return null;
 
-  branchSelect.innerHTML = `<option value="">Seleccione una sucursal</option>`;
+  return (items || []).find((item) => {
+    return String(item?.name ?? "").trim().toLowerCase() === target;
+  }) || null;
+}
 
-  branches.forEach((branch) => {
-    const option = document.createElement("option");
-    option.value = branch.id;
-    option.textContent = branch.name || "";
-    if (selectedId && String(selectedId) === String(branch.id)) {
-      option.selected = true;
-    }
-    branchSelect.appendChild(option);
-  });
+function syncHiddenId(inputSelector, hiddenSelector, items) {
+  const input = el(inputSelector);
+  const hidden = el(hiddenSelector);
 
-  branchSelect.disabled = branches.length === 0;
+  if (!input || !hidden) return null;
+
+  const match = findItemByExactName(items, input.value);
+  hidden.value = match?.id || "";
+  return match;
+}
+
+function renderClinicOptions() {
+  setDatalistOptions(el(S.clinicOptions), state.clinics, "name");
+}
+
+function renderBranchOptions(branches = []) {
+  setDatalistOptions(el(S.branchOptions), branches, "name");
 }
 
 async function loadBranchesForClinic(clinicId, selectedBranchId = "") {
-  const branchSelect = el(S.branchSelect);
-  if (!branchSelect) return;
+  const branchInput = el(S.branchInput);
+  const branchId = el(S.branchId);
+  const branchOptions = el(S.branchOptions);
+
+  if (!branchInput || !branchId || !branchOptions) return;
 
   if (!clinicId) {
-    branchSelect.innerHTML = `<option value="">Seleccione primero una clínica</option>`;
-    branchSelect.disabled = true;
+    state.branches = [];
+    branchInput.value = "";
+    branchId.value = "";
+    branchInput.disabled = true;
+    branchOptions.innerHTML = "";
     return;
   }
 
-  branchSelect.innerHTML = `<option value="">Cargando...</option>`;
+  branchInput.disabled = true;
+  branchInput.value = "";
+  branchId.value = "";
+  branchOptions.innerHTML = `<option value="">Cargando...</option>`;
 
   try {
     state.branches = await getBranchesByClinic(clinicId);
-    renderBranchOptions(state.branches, selectedBranchId);
+    renderBranchOptions(state.branches);
+
+    const selectedBranch = state.branches.find(
+      (branch) => String(branch.id) === String(selectedBranchId)
+    );
+
+    if (selectedBranch) {
+      branchInput.value = selectedBranch.name || "";
+      branchId.value = selectedBranch.id || "";
+    }
+
+    branchInput.disabled = false;
   } catch (error) {
     console.error(error);
-    branchSelect.innerHTML = `<option value="">Error cargando sucursales</option>`;
-    branchSelect.disabled = true;
+    branchOptions.innerHTML = `<option value="">Error cargando sucursales</option>`;
+    branchInput.disabled = true;
   }
 }
 
@@ -307,8 +346,8 @@ async function saveUser(event) {
     const active = getChecked(S.active);
     const roleCodes = getSelectedRoleCodes();
     const role = roleCodes[0] || "recepcion";
-    const clinicId = getValue(S.clinicSelect);
-    const branchId = getValue(S.branchSelect);
+    const clinicId = getValue(S.clinicId);
+    const branchId = getValue(S.branchId);
 
     const result = await UsersModel.saveUser({
       action: state.editingUserId ? "update" : "create",
@@ -339,9 +378,7 @@ async function saveUser(event) {
 }
 
 async function deleteUser(id) {
-  const ok = confirm(
-    "¿Desea eliminar este usuario? Esta acción no se puede deshacer.",
-  );
+  const ok = confirm("¿Desea eliminar este usuario? Esta acción no se puede deshacer.");
   if (!ok) return;
 
   try {
@@ -366,8 +403,9 @@ async function handleTableClick(event) {
     if (!user) return;
 
     state.editingUserId = user.id;
-    setValue(S.email, user.email);
-    setValue(S.fullName, user.full_name);
+    setValue(S.id, user.id);
+    setValue(S.email, user.email || "");
+    setValue(S.fullName, user.full_name || "");
     setChecked(S.active, user.active);
     setValue(S.password, "");
     setValue(S.confirmPassword, "");
@@ -375,20 +413,26 @@ async function handleTableClick(event) {
     const rolesSelect = el(S.rolesSelect);
     if (rolesSelect) {
       const userRoleCodes = new Set(
-        (user.roles || []).map((r) => String(r.code).toLowerCase()),
+        (user.roles || []).map((r) => String(r.code).toLowerCase())
       );
+
       Array.from(rolesSelect.options).forEach((opt) => {
         opt.selected = userRoleCodes.has(String(opt.value).toLowerCase());
       });
     }
 
-    const clinicId = user.clinic_id || "";
-    const branchId = user.branch_id || "";
+    const clinicId = user.clinic?.id || user.clinic_id || "";
+    const clinicName = user.clinic?.name || "";
+    const branchId = user.branch?.id || user.branch_id || "";
+    const branchName = user.branch?.name || "";
 
-    const clinicSelect = el(S.clinicSelect);
-    if (clinicSelect) clinicSelect.value = clinicId;
+    setValue(S.clinicInput, clinicName);
+    setValue(S.clinicId, clinicId);
 
     await loadBranchesForClinic(clinicId, branchId);
+
+    setValue(S.branchInput, branchName);
+    setValue(S.branchId, branchId);
 
     openModal();
   }
@@ -398,9 +442,29 @@ async function handleTableClick(event) {
   }
 }
 
-async function handleClinicChange() {
-  const clinicId = getValue(S.clinicSelect);
-  await loadBranchesForClinic(clinicId, "");
+async function handleClinicInput() {
+  const match = syncHiddenId(S.clinicInput, S.clinicId, state.clinics);
+
+  const branchInput = el(S.branchInput);
+  const branchId = el(S.branchId);
+
+  if (!match) {
+    state.branches = [];
+    if (branchInput) {
+      branchInput.value = "";
+      branchInput.disabled = true;
+    }
+    if (branchId) branchId.value = "";
+    const branchOptions = el(S.branchOptions);
+    if (branchOptions) branchOptions.innerHTML = "";
+    return;
+  }
+
+  await loadBranchesForClinic(match.id, "");
+}
+
+function handleBranchInput() {
+  syncHiddenId(S.branchInput, S.branchId, state.branches);
 }
 
 function bindEvents() {
@@ -423,7 +487,11 @@ function bindEvents() {
 
   el(S.btnCancel)?.addEventListener("click", cancelUserForm);
 
-  el(S.clinicSelect)?.addEventListener("change", handleClinicChange);
+  el(S.clinicInput)?.addEventListener("input", handleClinicInput);
+  el(S.clinicInput)?.addEventListener("change", handleClinicInput);
+
+  el(S.branchInput)?.addEventListener("input", handleBranchInput);
+  el(S.branchInput)?.addEventListener("change", handleBranchInput);
 }
 
 export async function initUsersView() {
@@ -433,10 +501,10 @@ export async function initUsersView() {
     await loadClinics();
     await loadUsers();
 
-    const branchSelect = el(S.branchSelect);
-    if (branchSelect) {
-      branchSelect.innerHTML = `<option value="">Seleccione primero una clínica</option>`;
-      branchSelect.disabled = true;
+    const branchInput = el(S.branchInput);
+    if (branchInput) {
+      branchInput.innerHTML = "";
+      branchInput.disabled = true;
     }
   } catch (error) {
     console.error(error);

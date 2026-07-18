@@ -1,4 +1,4 @@
-// js/models/auditModel.js
+//js/models/auditModel.js
 import { supabase } from "../config/supabase.js";
 
 const CONTEXT_KEY = "app_context";
@@ -91,14 +91,17 @@ export async function listAuditLogs(limit = 50) {
     .from("audit_logs")
     .select(`
       id,
-      user_id,
-      action_type_id,
       entity_name,
       entity_id,
       details,
       ip_address,
       created_at,
-      audit_action_types (
+      user:app_users!audit_logs_user_id_fkey (
+        id,
+        full_name,
+        email
+      ),
+      action_type:audit_action_types!audit_logs_action_type_id_fkey (
         id,
         code,
         name

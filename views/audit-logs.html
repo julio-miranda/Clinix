@@ -1,9 +1,25 @@
-<section class="page">
-  <h1>Auditoría básica</h1>
+<section class="page audit-page">
+  <div class="page-header">
+    <a href="#/dashboard" class="btn-back">← Regresar al dashboard</a>
+    <div>
+      <h1>Auditoría</h1>
+      <p>Registro de acciones realizadas en el sistema</p>
+    </div>
+  </div>
 
-  <div class="card">
-    <div id="auditLogsContainer">
-      Cargando registros...
+  <div class="card audit-card">
+    <div class="audit-card__header">
+      <div>
+        <h2>Registros recientes</h2>
+        <p>Se muestran los eventos más recientes de la sucursal seleccionada.</p>
+      </div>
+      <div id="auditLogsMeta" class="audit-card__meta"></div>
+    </div>
+
+    <div id="auditLogsContainer" class="audit-logs">
+      <div class="audit-empty">
+        Cargando registros...
+      </div>
     </div>
   </div>
 </section>

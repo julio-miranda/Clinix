@@ -94,14 +94,33 @@
             </div>
 
             <div class="form-grid">
-                <div>
-                    <label for="usuarioClinicId">Clínica</label>
-                    <select id="usuarioClinicId" required></select>
+                <div class="field-group">
+                    <label for="usuarioClinicInput">Clínica</label>
+                    <input
+                        type="text"
+                        id="usuarioClinicInput"
+                        list="clinicOptions"
+                        placeholder="Escriba o seleccione una clínica"
+                        autocomplete="off"
+                        required
+                    />
+                    <input type="hidden" id="usuarioClinicId" />
+                    <datalist id="clinicOptions"></datalist>
                 </div>
 
-                <div>
-                    <label for="usuarioBranchId">Sucursal</label>
-                    <select id="usuarioBranchId" required></select>
+                <div class="field-group">
+                    <label for="usuarioBranchInput">Sucursal</label>
+                    <input
+                        type="text"
+                        id="usuarioBranchInput"
+                        list="branchOptions"
+                        placeholder="Escriba o seleccione una sucursal"
+                        autocomplete="off"
+                        disabled
+                        required
+                    />
+                    <input type="hidden" id="usuarioBranchId" />
+                    <datalist id="branchOptions"></datalist>
                 </div>
             </div>
 

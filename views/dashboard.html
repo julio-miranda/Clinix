@@ -23,14 +23,31 @@
     <h2>Contexto de trabajo</h2>
 
     <div class="form-grid">
-      <div>
-        <label for="clinicSelect">Clínica</label>
-        <select id="clinicSelect"></select>
+      <div class="field-group">
+        <label for="clinicInput">Clínica</label>
+        <input
+          id="clinicInput"
+          type="text"
+          list="clinicOptions"
+          placeholder="Escriba o seleccione una clínica"
+          autocomplete="off"
+        />
+        <input type="hidden" id="clinicId" />
+        <datalist id="clinicOptions"></datalist>
       </div>
 
-      <div>
-        <label for="branchSelect">Sucursal</label>
-        <select id="branchSelect"></select>
+      <div class="field-group">
+        <label for="branchInput">Sucursal</label>
+        <input
+          id="branchInput"
+          type="text"
+          list="branchOptions"
+          placeholder="Escriba o seleccione una sucursal"
+          autocomplete="off"
+          disabled
+        />
+        <input type="hidden" id="branchId" />
+        <datalist id="branchOptions"></datalist>
       </div>
     </div>
 

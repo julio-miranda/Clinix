@@ -23,10 +23,14 @@
     <div class="form-section">
       <h2>Datos generales</h2>
 
-      <label for="patientSelect">Paciente</label>
-      <select name="patient_id" id="patientSelect" required>
-        <option value="">Seleccione un paciente</option>
-      </select>
+      <label for="patientInput">Paciente</label>
+
+      <input type="text" id="patientInput" list="patientOptions" placeholder="Buscar paciente..." autocomplete="off"
+        required />
+
+      <input type="hidden" name="patient_id" id="patientId" />
+
+      <datalist id="patientOptions"></datalist>
 
       <label for="chief_complaint">Motivo de consulta</label>
       <textarea name="chief_complaint" id="chief_complaint" required></textarea>

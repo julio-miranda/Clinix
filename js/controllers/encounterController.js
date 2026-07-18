@@ -11,6 +11,7 @@ import {
 } from "../models/consultationModel.js";
 
 let editingEncounterId = null;
+let patientsCache = [];
 
 function normalizeForCode(value) {
   return String(value || "")
@@ -115,9 +116,14 @@ export async function initEncounterView(params = new URLSearchParams()) {
     const patientId = params.get("patient_id");
     const encounterId = params.get("encounter_id") || params.get("id");
 
-    const select = document.getElementById("patientSelect");
-    if (select) {
-      select.addEventListener("change", handlePatientChange);
+    const patientInput = document.getElementById("patientInput");
+
+    if (patientInput) {
+
+      patientInput.addEventListener("input", handlePatientChange);
+
+      patientInput.addEventListener("change", handlePatientChange);
+
     }
 
     const form = document.getElementById("encounterForm");
@@ -154,11 +160,10 @@ async function loadEncounterForEdit(encounterId) {
   await loadPatientSelect(patientId);
 
   const form = document.getElementById("encounterForm");
-  const select = document.getElementById("patientSelect");
+  const patientInput = document.getElementById("patientInput");
 
-  if (select) {
-    select.value = patientId;
-    select.disabled = true;
+  if (patientInput) {
+    patientInput.disabled = true;
   }
 
   const statusCode = String(detail?.encounter_statuses?.code || "").toUpperCase();
@@ -258,63 +263,118 @@ function lockClosedForm(form) {
 }
 
 async function loadPatientSelect(selectedId = "") {
-  const select = document.getElementById("patientSelect");
-  if (!select) return;
+  const patientInput = document.getElementById("patientInput");
+  const patientId = document.getElementById("patientId");
+  const patientOptions = document.getElementById("patientOptions");
+
+  if (!patientInput || !patientId || !patientOptions) return;
 
   try {
-    const patients = await getPatients("");
+    patientsCache = await getPatients("");
 
-    select.innerHTML = `
-      <option value="">Seleccione un paciente</option>
-      ${patients
-        .map((p) => {
-          const label = `${p.first_name || ""} ${p.last_name || ""}`.trim();
-          const selected = String(p.id) === String(selectedId) ? "selected" : "";
+    patientOptions.innerHTML = "";
 
-          return `
-            <option value="${p.id}" ${selected}>
-              ${label} - ${p.medical_record_number || ""}
-            </option>
-          `;
-        })
-        .join("")}
-    `;
+    patientsCache.forEach(patient => {
+
+      const option = document.createElement("option");
+
+      option.value =
+        `${patient.first_name || ""} ${patient.last_name || ""}`.trim() +
+        ` (${patient.medical_record_number || ""})`;
+
+      patientOptions.appendChild(option);
+    });
+
+    if (selectedId) {
+
+      const selected = patientsCache.find(
+        p => String(p.id) === String(selectedId)
+      );
+
+      if (selected) {
+
+        patientInput.value =
+          `${selected.first_name || ""} ${selected.last_name || ""}`.trim() +
+          ` (${selected.medical_record_number || ""})`;
+
+        patientId.value = selected.id;
+      }
+    }
+
   } catch (error) {
-    console.error("Error cargando pacientes:", error);
+    console.error(error);
     alert("No se pudieron cargar los pacientes.");
   }
 }
 
-async function handlePatientChange() {
-  const select = document.getElementById("patientSelect");
-  const patientId = select?.value;
+function getSelectedPatient() {
 
-  if (!patientId) return;
+  const patientInput = document.getElementById("patientInput");
+  const patientId = document.getElementById("patientId");
+
+  const text = patientInput.value.trim();
+
+  const patient = patientsCache.find(p => {
+
+    const label =
+      `${p.first_name || ""} ${p.last_name || ""}`.trim() +
+      ` (${p.medical_record_number || ""})`;
+
+    return label.toLowerCase() === text.toLowerCase();
+
+  });
+
+  patientId.value = patient?.id || "";
+
+  return patient;
+}
+
+async function handlePatientChange() {
+
+  const patient = getSelectedPatient();
+
+  if (!patient) return;
+
+  const patientId = patient.id;
 
   try {
+
     const antecedents = await getPatientAntecedents(patientId);
     const allergies = await getPatientAllergies(patientId);
     const patientVitals = await getPatientVitals(patientId);
+
     const form = document.getElementById("encounterForm");
 
-    const medicalField = document.querySelector("[name='medical_history']");
-    const surgicalField = document.querySelector("[name='surgical_history']");
-    const allergiesField = document.querySelector("[name='allergies']");
+    document.getElementById("medical_history").value =
+      antecedents.medicalText || "";
 
-    if (medicalField) medicalField.value = antecedents.medicalText || "";
-    if (surgicalField) surgicalField.value = antecedents.surgicalText || "";
-    if (allergiesField) allergiesField.value = allergies.text || "";
+    document.getElementById("surgical_history").value =
+      antecedents.surgicalText || "";
+
+    document.getElementById("allergies").value =
+      allergies.text || "";
 
     if (form) {
-      form.dataset.originalMedicalHistory = JSON.stringify(antecedents.medicalLines || []);
-      form.dataset.originalSurgicalHistory = JSON.stringify(antecedents.surgicalLines || []);
-      form.dataset.originalAllergies = JSON.stringify(allergies.lines || []);
+
+      form.dataset.originalMedicalHistory =
+        JSON.stringify(antecedents.medicalLines || []);
+
+      form.dataset.originalSurgicalHistory =
+        JSON.stringify(antecedents.surgicalLines || []);
+
+      form.dataset.originalAllergies =
+        JSON.stringify(allergies.lines || []);
+
     }
 
     applyVitalsToForm(patientVitals);
+
   } catch (error) {
-    console.error("Error cargando antecedentes:", error);
+
+    console.error(error);
+
   }
+
 }
 
 async function handleEncounterSubmit(event) {
@@ -334,7 +394,7 @@ async function handleEncounterSubmit(event) {
   if (submitBtn) submitBtn.disabled = true;
 
   try {
-    const patientId = form.patient_id.value;
+    const patientId = document.getElementById("patientId").value;
 
     if (!patientId) {
       alert("Seleccione un paciente.");
@@ -389,9 +449,9 @@ async function handleEncounterSubmit(event) {
 
     const result = editingEncounterId
       ? await updateConsultationBundle({
-          encounterId: editingEncounterId,
-          ...payload
-        })
+        encounterId: editingEncounterId,
+        ...payload
+      })
       : await saveConsultationBundle(payload);
 
     alert(editingEncounterId ? "Consulta actualizada correctamente." : "Consulta guardada correctamente.");
